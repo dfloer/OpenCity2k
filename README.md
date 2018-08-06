@@ -18,9 +18,13 @@ Initial foc
  - pillow
  - python 3.6+
  
- ## Currently supported features.
+## Currently supported features.
  - Opening and uncompressing city files.
  - Saving uncompressed and compressed city files.
+ - Parsing the TEXT_USA files.
  
- ## Utilies
- - None yet.
+## Utilities
+ - text_usa_parse.py: Extracts the contents of TEXT_USA.DAT. Currently very raw output.
+    - `-d/--data`: the path to TEXT_USA.DAT
+    - `-i/--index`: the path to TEXT_USA.IDX
+    - `-t/--text`: optional path for exported text file. Omitting this will write to stdout.
