@@ -146,3 +146,17 @@ def bytes_to_hex(input_bytes):
         String representation of the bytes.
     """
     return r'\x' + r'\x'.join('{:02x}'.format(x) for x in input_bytes)
+
+
+def bytes_to_uint(input_bytes):
+    """
+    Variable length convenience function to convert some number of bytes to an int.
+    Args:
+        input_bytes (bytes): Input bytes to convert.
+    Returns:
+        Integer.
+    """
+    num_bytes = len(input_bytes)
+    mapping = {1: parse_uint8, 2: parse_uint16, 4: parse_uint32}
+    f = mapping[num_bytes]
+    return f(input_bytes)

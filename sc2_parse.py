@@ -1,7 +1,7 @@
 import sc2_iff_parse as sc2p
 import itertools
 import collections
-from utils import parse_int32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str
+from utils import parse_int32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str, bytes_to_uint
 import argparse
 import os.path
 import Data.buildings as buildings
@@ -226,6 +226,62 @@ class City:
             if self.debug:
                 print(f"Graph: {graph_name}\n{graph}")
 
+    def parse_scenario(self, raw_city_data):
+        """
+        Parses the scenario information.
+        Args:
+            raw_city_data (bytes): Raw data to parse scenario information out of.
+        """
+        self.is_scenario = True
+
+        raw_text = raw_city_data["TEXT"]
+        raw_scenario = raw_city_data["SCEN"]
+        picture = raw_city_data["PICT"]
+
+        for entry in raw_text:
+            string_id = entry[: 4]
+            raw_string = entry[4 :].decode('ASCII').replace('\r', '\n')
+            if string_id == b'\x80\x00\x00\x00':
+                self.scenario_text = raw_string
+            elif string_id == b'\x81\x00\x00\x00':
+                self.scenario_descriptive_text = raw_string
+            else:
+                print(f"Found unknown TEXT block in input file.\nid: {string_id}, contents: \"{raw_string}\"")
+        if self.debug:
+            print(f"Scenario:\nShort text: {self.scenario_text}\nDescriptive Text:{self.scenario_descriptive_text}")
+
+        conditions = {}
+        offset = 4
+        contents = collections.OrderedDict((
+            ("disaster_type", 2),
+            ("distater_x_location", 1),
+            ("disaster_y_location", 1),
+            ("time_limit_months", 2),
+            ("city_size_goal", 4),
+            ("residential_goal", 4),
+            ("commercial_goal", 4),
+            ("industrial_goal", 4),
+            ("cash_flow_goal-bonds", 4),
+            ("land_value_goal", 4),
+            ("pollution_limit", 4),
+            ("traffic_limit", 4),
+            ("crime_limit", 4),
+            ("build_item_one", 1),
+            ("build_item_two", 1),
+            ("item_one_tiles", 2),
+            ("item_two_tiles", 2),))
+        for k, v in contents.items():
+            conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
+            offset += v
+            if self.debug:
+                print(f"Conditions: {conditions}")
+            self.scenario_condition = conditions
+
+        # Raw for now.
+        self.scenario_pict = picture
+
+
+
 
     def find_buildings(self, raw_sc2_data):
         """
@@ -318,13 +374,10 @@ class City:
         self.parse_microsim(uncompressed_city["XMIC"])
         self.parse_things(uncompressed_city["XTHG"])
         self.parse_graphs(uncompressed_city["XGRP"])
-        # To be handled:
-        # Scenario stuff
-        # TEXT
-        # SCEN
-        # PICT
 
-
+        # Check for scenario.
+        if all(x in uncompressed_city.keys() for x in ("TEXT", "SCEN", "PICT")):
+            self.parse_scenario(uncompressed_city)
 
     def name_city(self, uncompressed_data):
         """
