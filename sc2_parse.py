@@ -1,10 +1,11 @@
 import sc2_iff_parse as sc2p
 import itertools
 import collections
-from utils import parse_int32
+from utils import parse_int32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str
 import argparse
 import os.path
 import Data.buildings as buildings
+from copy import deepcopy
 
 
 class City:
@@ -24,14 +25,17 @@ class City:
     _invention_names = ['gas_power', 'nuclear_power', 'solar_power', 'wind_power', 'microwave_power', 'fusion_power',
                         'airport', 'highways', 'buses', 'subways', 'water_treatment', 'desalinisation', 'plymouth',
                         'forest', 'darco', 'launch', 'highway_2']
+
     def __init__(self):
         self.city_name = ""
-        # self.tilelist = []
-        self.xthg = {}
         self.labels = {}
         self.microsim_state = {}
         self.graph_data = {}
-        self.buildings = {}
+        self.tilelist = {}
+        self.buildings = {}  # Note that this stores *only* buildings.
+        self.networks = {}  # Stores roads, rails, powerlines and other things that are above ground networks.
+        self.groundcover = {}  # Stores trees, rubble and radioactivity.
+        self.things = {}
         self.city_size = 128
 
         # temporary
@@ -39,12 +43,15 @@ class City:
         self.graph_data_hack = bytearray()
         self.labels_hack = bytearray()
 
+        self.labels = {}
+        self.graphs = {k: None for k in self._graph_window_graphs}
+
         # Stuff from Misc
         self.city_attributes = {}
         self.budget = None
         self.ordinances = [0] * 20
         self.neighbor_info = {}
-        self.building_count = []
+        self.building_count = {}
         self.simulator_settings = {}
         self.inventions = {}
         self.population_graphs = {}
@@ -52,6 +59,15 @@ class City:
         self.simulator_settings = {x: None for x in self._simulator_setting_names}
         self.game_settings = {x: None for x in self._game_setting_names}
         self.inventions = {x: None for x in self._invention_names}
+        # Minimaps
+        self.traffic = {}
+        self.pollution = {}
+        self.value = {}
+        self.crime = {}
+        self.police = {}
+        self.fire = {}
+        self.density = {}
+        self.growth = {}
 
         # Optional Scenario stuff
         self.is_scenario = False
@@ -65,6 +81,152 @@ class City:
         # debugging
         self.debug = False
 
+    def create_minimaps(self, raw_sc2_data):
+        """
+        Creates the 8 minimaps.
+        Args:
+            raw_sc2_data (bytes): Uncompressed .sc2 file.
+        """
+        # Minimaps that map 4 tiles to 1.
+        map_size = self.city_size // 2
+        for x in range(map_size):
+            for y in range(map_size):
+                tile_idx = x * map_size + y
+                tile_key = (x, y)
+                xtrf = raw_sc2_data["XTRF"][tile_idx: tile_idx + 1]
+                xplt = raw_sc2_data["XPLT"][tile_idx: tile_idx + 1]
+                xval = raw_sc2_data["XVAL"][tile_idx: tile_idx + 1]
+                xcrm = raw_sc2_data["XCRM"][tile_idx: tile_idx + 1]
+                self.traffic[tile_key] = parse_uint8(xtrf)
+                self.pollution[tile_key] = parse_uint8(xplt)
+                self.value[tile_key] = parse_uint8(xval)
+                self.crime[tile_key] = parse_uint8(xcrm)
+                if self.debug:
+                    print(f"{file_key}: traffic: {self.traffic}, pollution: {self.pollution}, land value: {self.value}, crime: {self.crime}\n")
+        # Minimaps that map 16 tiles to 1.
+        map_size_small = self.city_size // 4
+        for x in range(map_size_small):
+            for y in range(map_size_small):
+                tile_idx = x * map_size_small + y
+                tile_key = (x, y)
+                xplc = raw_sc2_data["XPLC"][tile_idx: tile_idx + 1]
+                xfir = raw_sc2_data["XFIR"][tile_idx: tile_idx + 1]
+                xpop = raw_sc2_data["XPOP"][tile_idx: tile_idx + 1]
+                xrog = raw_sc2_data["XROG"][tile_idx: tile_idx + 1]
+                self.police[tile_key] = parse_uint8(xplc)
+                self.fire[tile_key] = parse_uint8(xfir)
+                self.density[tile_key] = parse_uint8(xpop)
+                self.growth[tile_key] = parse_uint8(xrog)
+                if self.debug:
+                    print(f"{tile_key}: police: {self.police}, fire: {self.fire}, densitye: {self.density}, growth: {self.growth}\n")
+
+    def create_tilelist(self, raw_sc2_data):
+        """
+        Stores information about a tile.
+        Args:
+            raw_sc2_data (bytes): Uncompressed .sc2 file.
+        """
+        for row in range(self.city_size):
+            for col in range(self.city_size):
+                tile = Tile()
+                tile_idx = row * self.city_size + col
+                if self.debug:
+                    print(f"index: {tile_idx}")
+                # First start with parsing the terrain related features.
+                altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
+                xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
+                altm_bits = int_to_bitstring(parse_uint16(altm), 16)
+                tile.altitude_water = altm[7 : 8]
+                tile.altitude_unknown = altm[8 : 10]
+                tile.altitude = altm[11 : ]
+                tile.terrain = parse_uint8(xter)
+                if self.debug:
+                    print(f"altm: {altm_bits}, xter: {tile.terrain}")
+                tile.altidue_tunnel = altm[0 : 7]
+                # Next parse city stuff.
+                # skip self.building for now, it's handled specially.
+                xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
+                xzon_bits = int_to_bitstring(parse_uint8(xzon), 8)
+                tile.zone_corners = xzon_bits[0 : 4]
+                tile.zone = int(xzon_bits[4 : ], 2)
+                xund = raw_sc2_data["XUND"][tile_idx : tile_idx + 1]
+                tile.underground = parse_uint8(xund)
+                if self.debug:
+                    print(f"zone: {tile.zone}, corners: {tile.zone_corners}, underground: {tile.underground}")
+                # text/signs
+                xtxt = raw_sc2_data["XTXT"][tile_idx : tile_idx + 1]
+                tile.text_pointer = parse_uint8(xtxt)
+                # bit flags
+                xbit = raw_sc2_data["XBIT"][tile_idx : tile_idx + 1]
+                tile.bit_flags = BitFlags(parse_uint8(xbit))
+                if self.debug:
+                    print(f"text pointer: {tile.text_pointer}, bit flags: {tile.bit_flags}")
+                # Add the new tile to the tilelist
+                self.tilelist[(row, col)] = tile
+
+    def parse_labels(self, xlab_segment):
+        """
+        Parses the label data.
+        Todo: Make handling of "special" labels easier.
+        Args:
+            xlab_segment (bytes): XLAB sgement of the raw .sc2 file.
+        """
+        for x in range(0, len(xlab_segment), 25):
+            label_id = x // 25
+            raw_label = xlab_segment[x : x + 25]
+            label_len = parse_uint8(raw_label[0 : 1])
+            label = raw_label[1 : label_len + 1].decode('ascii', 'replace')
+
+            self.labels[label_id] = label
+            if self.debug:
+                print(f"Label: {label_id}: '{label}'")
+
+    def parse_microsim(self, xmic_segment):
+        """
+        Parses the label data.
+        Note that this is incomplete and contains the raw bytes presently.
+        Args:
+            xmic_segment (bytes): XMIC sgement of the raw .sc2 file.
+        """
+        for x in range(0, len(xmic_segment), 8):
+            microsim_id = x // 8
+            microsim = xmic_segment[x : x + 8]
+            self.microsim_state[microsim_id] = microsim
+            if self.debug:
+                print(f"Raw Microsim: {microsim_id}: {bytes_to_hex(microsim)}")
+
+    def parse_things(self, xthg_segments):
+        """
+        Parses the XTHG segment.
+        Note: incompolete as XTHG segment spec not fully known.
+        Args:
+            xthg_segments (bytes): Raw bytes representing the segment.
+        """
+        for idx in range(0, len(xthg_segments), 12):
+            thing_data = xthg_segments[idx : idx + 12]
+            thing_index = idx // 12
+            thing = Thing()
+            thing.parse_thing(thing_data)
+            if self.debug:
+                print(f"Index: {thing_index}, {thing}")
+            self.things[thing_index] = thing
+
+    def parse_graphs(self, xgrp_segment):
+        """
+        Parses the various graphs.
+        Args:
+            xgrp_segment (bytes): Raw graph data to parse
+        """
+        segment_len = 52 * 4
+        for idx, graph_name in enumerate(self._graph_window_graphs):
+            graph = Graph()
+            graph_start = idx * segment_len
+            graph.parse_graph(xgrp_segment[graph_start : graph_start + segment_len])
+            self.graphs[graph_name] = graph
+            if self.debug:
+                print(f"Graph: {graph_name}\n{graph}")
+
+
     def find_buildings(self, raw_sc2_data):
         """
         Finds all of the buildings in a city file and creates a dict populated with Building objects with the keys being the x, y coordinates of the left corner.
@@ -76,40 +238,66 @@ class City:
             Buildings are stored as a dictionary, where a tile's xy coordinates are the key. Each tile of a building will point back to the same builiding object. This handles holes in the building.
         Args:
             raw_sc2_data: Raw data for the city.
-        Returns:
-            Building dictionary.
         """
-        # Todo: Check these:
+        # Todo: Check this:
         left_corner = 0b1000
-        top_corner = 0b0100
-        right_corner = 0b0010
-        bottom_corner = 0b0001
+
+        groundcover_ids = list(range(0x00, 0x0D + 1))
+        network_ids = list(range(0x0E, 0x79 + 1))
 
         raw_xbld = raw_sc2_data["XBLD"]
-        zone_bitmask = raw_sc2_data["XZON"]
         for row in range(self.city_size):
             for col in range(self.city_size):
                 # Find left corner.
-                zone_mask = zone_bitmask[row][col][: 4]  # Only the the first 4 bits are corner masks.
-                if zone_mask & left_corner:
+                zone_mask = self.tilelist[(row, col)].zone_corners
+                if self.debug:
+                    print(f"Checking building at: ({row}, {col})")
+                if int(zone_mask, 2) & left_corner:
+                    tile_idx = row * self.city_size + col
+                    building_id = raw_xbld[tile_idx]
+                    new_building = Building(building_id, (row, col))
+                    self.buildings[(row, col)] = new_building
+                    self.tilelist[(row, col)].building = new_building
+                    building_size = buildings.get_size(building_id)
                     if self.debug:
-                        print(f"Found Building: {new_building_id} at ({building_x}, {building_y})")
-                    building_id = raw_xbld[row][col]
-                    building = Building(building_id)
-                    self.buildings[(row, col)] = building
-                    building_size = buildings.get_size_by_id(building_id)
+                        print(f"Found Building: {building_id} with size: {building_size} at ({row}, {col})")
+
                     # Now we need to find the rest og the building.
-                    for building_x in range(row, row + building_size):
-                        for building_y in range(col, col + building_size):
-                            new_building_id = raw_xbld[building_x][building_y]
+                    if building_size == 1:
+                        continue
+                    for building_x in range(row + 1, row + building_size):
+                        for building_y in range(col + 1, col + building_size):
+                            next_tile_idx = building_x * self.city_size + building_y
+                            new_building_id = raw_xbld[next_tile_idx]
                             if new_building_id == building_id:
-                                self.buildings[(row, col)] = building
+                                self.tilelist[(row, col)].building = new_building
                                 if self.debug:
                                     print(f"Added Building: {new_building_id} at ({building_x}, {building_y})")
                             else:
                                 if self.debug:
                                     print(f"Found hole at: ({building_x}, {building_y})")
-                                # This should probably be handled, but not yet.
+                                    # This should probably be handled, but not yet.
+                else:
+                    # Why are groundcover and networks treated differently?
+                    # Because it seems (seemed?) to add flexibility.
+                    tile_idx = row * self.city_size + col
+                    building_id = raw_xbld[tile_idx]
+                    if building_id in groundcover_ids:
+                        new_building = Building(building_id, (row, col))
+                        self.groundcover[(row, col)] = new_building
+                        self.tilelist[(row, col)].building = new_building
+                        if self.debug:
+                            print(f"Found groundcover: {building_id} at ({row}, {col})")
+                    elif building_id in network_ids:
+                        new_building = Building(building_id, (row, col))
+                        self.groundcover[(row, col)] = new_building
+                        self.tilelist[(row, col)].building = new_building
+                        if self.debug:
+                            print(f"Found network: {building_id} at ({row}, {col})")
+                    else:
+                        if self.debug:
+                            print(f"Tile parsing fallthrough at ({building_x}, {building_y}) with id: {new_building_id}")
+                        pass
 
 
 
@@ -123,8 +311,19 @@ class City:
         """
         uncompressed_city = self.open_and_uncompress_sc2_file(city_path)
         self.name_city(uncompressed_city)
+        self.create_tilelist(uncompressed_city)
         self.find_buildings(uncompressed_city)
         self.parse_misc(uncompressed_city["MISC"])
+        self.parse_labels(uncompressed_city["XLAB"])
+        self.parse_microsim(uncompressed_city["XMIC"])
+        self.parse_things(uncompressed_city["XTHG"])
+        self.parse_graphs(uncompressed_city["XGRP"])
+        # To be handled:
+        # Scenario stuff
+        # TEXT
+        # SCEN
+        # PICT
+
 
 
     def name_city(self, uncompressed_data):
@@ -299,7 +498,7 @@ class City:
                 self.industry_graphs = self.misc_uninterleave_data(self._industry_graph_names, offset, length, misc_data)
             elif v == 'Tile Counts':
                 for x in range(0, 256):
-                    self.building_count.extend([parse_int32(misc_data[offset: offset + 4])])
+                    self.building_count[x] = parse_int32(misc_data[offset: offset + 4])
                     offset += 4
             elif v == 'Bonds':
                 # Handled along with the budget.
@@ -367,12 +566,15 @@ class City:
 
 
 class Building:
-    def __init__(self, building_id, holes):
+    def __init__(self, building_id, coords):
         self.building_id = building_id
-        self.name = ''  # Todo: Lookup the friendly name from the ID.
+        self.name = buildings.get_name(building_id)
+        self.tile_coords = coords
 
     def __str__(self):
-        return f"Building{self.name} ({self.building_id})."
+        tile_x = self.tile_coords[0]
+        tile_y = self.tile_coords[1]
+        return f"Building: {self.name} ({self.building_id}) at ({tile_x}, {tile_y})."
 
 
 class BitFlags:
@@ -405,6 +607,24 @@ class BitFlags:
         """
         return int(str(self), 2)
 
+    def to_int(self):
+        """
+        Converts the bitflags to an int.
+        Returns:
+            An integer representation of the flags.
+        """
+        res = [self.powerable, self.powered, self.piped, self.watered, self.xval, self.water, self.rotate, self.salt]
+        res = ''.join([str(int(x == True)) for x in res])
+        return int(res, 2)
+
+    def to_byte(self):
+        """
+        Converts this bitflags to a bytes.
+        Returns:
+            A single, big endian byte representation of the bitflags.
+        """
+        return int_to_bytes(self.to_int(), 1)
+
 
 class Budget:
     """
@@ -419,27 +639,125 @@ class Budget:
         self.data = data
         self.bonds = []
         offset = 0x0FA0
-        self.ordinance_flags = "{0:b}".format(int.from_bytes(self.data[offset: offset + 4], byteorder='big')).zfill(20)
+        self.ordinance_flags = '0' * 20
 
-        self.sub_budget_indices = {'Property': {'Residents': 0x077C, 'Commerce': 0x07E8, 'Industry': 0x0854},
-                                   'Ordinances': 0x08C0,
+        self._sub_budget_indices = {'Property': {'Residential': [0x077C, 0x07E8], 'Commercial': [0x07E8, 0x0854], 'Industrial': [0x0854, 0x08C0]},
+                                   'Ordinances': [0x08C0, 0x08C0 + 20],
                                    'Bonds': 0x0930, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
                                    'Education': {'Schools': 0x0ADC, 'Colleges': 0x0B48},
                                    'Transit': {'Road': 0x0BB4, 'Hiway': 0x0C20, 'Bridge': 0x0C8C, 'Rail': 0x0CF8,
                                                'Subway': 0x0D64, 'Tunnel': 0x0DD0}}
 
-        self.sub_budget = copy.deepcopy(self.sub_budget_indices)
+        self.sub_budget = deepcopy(self.sub_budget_indices)
 
-        offset = 0x0610
-        for val in range(offset, offset + 50 * 4, 4):
-            self.bonds.extend([int.from_bytes(self.data[val: val + 4], byteorder='big')])
+    def parse_budget(self, raw_misc_data):
+        """
+        Parses the budget data segment from MISC into budget data.
+        Args:
+            budget_data_segment (bytes): Raw segment from Misc
+        """
+        pass
+        # Incomplete, obviously
 
-        for budget_name, budget_values in self.sub_budget_indices.items():
-            if type(budget_values) == int:
-                split_data = data[budget_values: budget_values + (27 * 4)]
-                self.sub_budget[budget_name] = SubBudget(budget_data=split_data, budget_name=budget_name)
-            else:
-                for sub_budget_name, sub_budget_values in budget_values.items():
-                    split_data = data[sub_budget_values: sub_budget_values + (27 * 4)]
-                    self.sub_budget[budget_name][sub_budget_name] = SubBudget(budget_data=split_data,
-                                                                              budget_name=budget_name)
+class Tile(City):
+    """
+    Stores all the information related to a tile.
+    """
+    def __init__(self):
+        # Altitude map related values.
+        self.altidue_tunnel = 0
+        self.altitude_water = 0
+        self.altitude_unknown = 0
+        self.altitude = 0
+        # Terrain
+        self.terrain = 0
+        # City stuff
+        self.building = None
+        self.zone_corners = 0
+        self.zone = 0
+        self.underground = 0
+        # text/signs
+        self.text_pointer = 0
+        # bit flags
+        self.bit_flags = None
+        # minimaps/simulation stuff
+        self.traffic = 0
+        self.pollution = 0
+        self.value = 0
+        self.crime = 0
+        self.police = 0
+        self.fire = 0
+        self.density = 0
+        self.growth = 0
+
+    def __str__(self):
+        s = f"Altitude:\n    tunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        terr = int_to_bitstring(self.terrain)
+        s += f"Terrain: {terr}\n"
+        # City stuff
+        corners = int_to_bitstring(self.zone_corners)
+        try:
+            b_id = self.building.building_id
+        except:
+            b_id = "None"
+        s += f"Buildings:\n    id: {b_id}, corners {corners}, zone: {self.zone}, underground: {self.underground}\n"
+        # text/signs
+        s += f"Text pointer: {self.text_pointer}"
+        # bit flags
+        s += f"Flags: {self.bit_flags}\n"
+        # minimaps/simulation stuff
+        s += f"Minimap:\n      Traffic: {self.traffic}, pollution: {self.pollution}, value: {self.value}, crime: {self.crime}, police: {self.police}, fire: {self.fire}, density: {self.density}, growth: {growth}."
+        return s
+
+
+class Thing:
+    """
+    Class to represent a thing stored in the XTHG segment.
+    """
+    def __init__(self):
+        self.thing_id = 0
+        self.rotation_1 = 0
+        self.rotation_2 = 0
+        self.x = 0
+        self.y = 0
+        self.data = [0] * 7
+
+    def parse_thing(self, raw_thing):
+        """
+        Parses raw bytes into a thing.
+        Args:
+            raw_thing (bytes):  12 bytes representing the thing.
+        """
+        # Why the index? Because python appears to automatically convert this to an int.
+        self.thing_id = raw_thing[0]
+        self.rotation_1 = raw_thing[1]
+        self.rotation_2 = raw_thing[2]
+        self.x = raw_thing[3]
+        self.y = raw_thing[4]
+        self.data = [raw_thing[x] for x in range(4, 12)]
+
+    def __str__(self):
+        return f"Thing with ID: { self.thing_id} at ({self.x}, {self.y}), rotations: {self.rotation_1}, {self.rotation_2}, data: {self.data}"
+
+class Graph:
+    """
+    Stores the data for a graph.
+    """
+    def __init__(self):
+        self.one_year = [0] * 12
+        self.ten_years = [0] * 20
+        self.hundred_years = [0] * 20
+
+    def parse_graph(self, raw_graphs):
+        start = 0
+        self.one_year = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 12 * 4, 4)]
+        start += 12 * 4
+        self.ten_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
+        start += 20 * 4
+        self.hundred_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
+
+    def __str__(self):
+        s = f"Year:\n\t{[x for x in self.one_year]}.\n"
+        s += f"10 Years:\n\t{[x for x in self.ten_years]}.\n"
+        s += f"100 Years:\n\t{[x for x in self.hundred_years]}.\n"
+        return s
