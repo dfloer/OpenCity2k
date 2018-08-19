@@ -301,7 +301,7 @@ def sc2_uncompress_input(input_file, input_type='sc2'):
     uncompressed_dict = collections.OrderedDict()
     for k, v in input_file.items():
         if input_type == 'sc2':
-            if k not in ("CNAM", "ALTM", "TEXT", "SCEN"):
+            if k not in ("CNAM", "ALTM", "TEXT", "SCEN", "PICT"):
                 uncompressed_dict[k] = uncompress_rle(v)
             elif k == "TEXT":
                 uncompressed_dict[k] = [bytearray(x) for x in v]
