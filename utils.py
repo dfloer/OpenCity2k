@@ -68,8 +68,81 @@ def parse_uint32(unparsed_bytes):
     """
     Parses 4 bytes into a big endian unsigned integer.
     Args:
-        unparsed_bytes (bytes):  4 bytes representing the int.
+        unparsed_bytes (bytes): 4 bytes representing the int.
     Returns:
         Integer representation.
     """
     return unpack('>I', unparsed_bytes)[0]
+
+
+def parse_uint16(unparsed_bytes):
+    """
+    Parses 2 bytes into a big endian unsigned integer.
+    Args:
+        unparsed_bytes (bytes): 2 bytes representing the int.
+    Returns:
+        Integer representation.
+    """
+    return unpack('>H', unparsed_bytes)[0]
+
+
+def parse_uint8(unparsed_bytes):
+    """
+    Parses 1 byte into a big endian signed integer.
+    Args:
+        unparsed_bytes (bytes): 1 bytes representing the int.
+    Returns:
+        Integer representation.
+    """
+    return unpack('>B', unparsed_bytes)[0]
+
+
+def int_to_bitstring(int_input, pad=0):
+    """
+    Converts an into into its binary representation as a string of 0s and 1s.
+    Optionally takes an argument for the length to pad to.
+    Args:
+        int_input (int): integer to convert.
+        pad (int): Pad with 0s to this length.
+    Returns:
+        String representation of the input integer in binary.
+    """
+    return "{0:b}".format(int_input).zfill(pad)
+
+
+def int_to_bytes(input_int, num_bytes, signed=False):
+    """
+    Converts an into the the given number of bytes. Will pad with 0x00 as needed.
+    Args:
+        input_int (int): integer to convert.
+        num_bytes (int): number of bytes to output.
+        signed (bool): whether or not the output is signed or not.
+    Returns:
+        Bytes representing the given integer.
+    """
+    # Conversion from arguments to struct.pack format string.
+    conversion = {(1, False): 'B', (1, True): 'b', (2, False): 'H', (2, True): 'h', (4, False): 'I', (4, True): 'i'}
+    return pack('>' + conversion[(num_bytes, signed)], input_int)
+
+
+def bytes_to_str(input_bytes):
+    """
+    Converts a sequence of bytes into the string representation.
+    Args:
+        input_bytes (bytes): Byte representation of an (ASCII) string.
+    Returns:
+        String representation.
+    """
+    s = input_bytes.decode('ascii', 'replace')
+    return s
+
+
+def bytes_to_hex(input_bytes):
+    """
+    Convenience function to turn bytes onto a nice hex string, because Python doesn't print the bytes properly.
+    Args:
+        input_bytes: Bytes to stringify.
+    Returns:
+        String representation of the bytes.
+    """
+    return r'\x' + r'\x'.join('{:02x}'.format(x) for x in input_bytes)
