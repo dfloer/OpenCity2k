@@ -1,11 +1,13 @@
 import sc2_iff_parse as sc2p
 import itertools
 import collections
-from utils import parse_int32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str, bytes_to_uint
+from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str, bytes_to_uint
 import argparse
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
+
+from struct import unpack
 
 
 class City:
@@ -74,7 +76,7 @@ class City:
         self.scenario_text = ''
         self.scenario_descriptive_text = ''
         self.scenario_condition = {}
-        self.scenario_pict = bytearray()
+        self.scenario_pict = []
 
         self.original_filename = ""
 
@@ -277,11 +279,28 @@ class City:
                 print(f"Conditions: {conditions}")
             self.scenario_condition = conditions
 
-        # Raw for now.
-        self.scenario_pict = picture
-
-
-
+        header = picture[0 : 4]
+        if header != bytearray(b'\x80\x00\x00\x00'):
+            print("Scenario PICT parsing failed.")  # todo: exception?
+        # Why is the endianness different here? It just is.
+        row_length = unpack('<H', picture[4 : 6])[0]  # x dimension of image.
+        row_count = unpack('<H', picture[6 : 8])[0]  # y dimension of image.
+        image_data = []
+        picture_data = picture[8 : ]
+        if self.debug:
+            print(f"Scenario PICT, {row_length}x{row_count} pixels:")
+        for row_idx in range(0, row_count):
+            row_start = row_idx * (row_length + 1)
+            row = [x for x in picture_data[row_start : row_start + row_length + 1]]
+            if row[-1] != 255:
+                row = [0] * row_length
+            else:
+                row = row[ : -1]
+            image_data.append(row)
+        if self.debug:
+            for idx, r in enumerate(image_data):
+                print(f"{idx}:\n{r}")
+        self.scenario_pict = image_data
 
     def find_buildings(self, raw_sc2_data):
         """
