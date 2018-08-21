@@ -171,6 +171,18 @@ def write_palette(palette_array, outfile):
         out_img.save(f, format='png')
 
 
+def palette_dict(palette_array):
+    """
+    Creates a dictionary to use for mapping colours.
+    Args:
+        palette_array (pillow image array): input pallet
+    Returns:
+        A dictionary of the form {id: {R, G, B)} for each entry in the palette.
+    """
+    flat_palette = [item for sublist in palette_array for item in sublist]
+    return {k: v for k, v in enumerate(flat_palette)}
+
+
 def draw_image(img_array, height, width, palette, outfile, mode='png', animate=False, dump_raw_frames=False):
     """
     Takes an image array and parses the colour information out of it, looks it up in the palette and then creates a bitmap file.
