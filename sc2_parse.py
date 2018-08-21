@@ -1,6 +1,6 @@
 import sc2_iff_parse as sc2p
 import collections
-from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str, bytes_to_uint
+from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
@@ -37,18 +37,11 @@ class City:
         self.groundcover = {}  # Stores trees, rubble and radioactivity.
         self.things = {}
         self.city_size = 128
-
-        # temporary
-        self.misc_hack = bytearray()
-        self.graph_data_hack = bytearray()
-        self.labels_hack = bytearray()
-
         self.graphs = {k: None for k in self._graph_window_graphs}
 
         # Stuff from Misc
         self.city_attributes = {}
         self.budget = None
-        self.ordinances = [0] * 20
         self.neighbor_info = {}
         self.building_count = {}
         self.simulator_settings = {}
@@ -339,8 +332,9 @@ class City:
                     # Now we need to find the rest og the building.
                     if building_size == 1:
                         continue
-                    for building_x in range(row + 1, row + building_size):
-                        for building_y in range(col + 1, col + building_size):
+                    # The clamping to 127 is to deal with certain industrial 3x3 buildings that glitch out on the edge of the map.
+                    for building_x in range(row + 1, min(row + building_size, 127)):
+                        for building_y in range(col + 1, min(col + building_size, 127)):
                             next_tile_idx = building_x * self.city_size + building_y
                             new_building_id = raw_xbld[next_tile_idx]
                             if new_building_id == building_id:
@@ -555,13 +549,13 @@ class City:
             self.simulator_settings.keys()) + list(self.game_settings.keys()) + list(self.inventions.keys())
 
         # Make sure the dict is sorted because following code requires the sorting.
-        sorted(parse_order.keys())
+        #sorted(parse_order.keys())
 
         # Parse misc and generate city attributes.
         for k, v in parse_order.items():
             offset = int(k, 16)
             if v not in handle_special:
-                self.city_attributes[v] = misc_data
+                self.city_attributes[v] = parse_uint32(misc_data[offset : offset + 4])
             elif v == 'Population Graphs':
                 length = 240
                 self.population_graphs = self.misc_uninterleave_data(self._population_graph_names, offset, length, misc_data)
@@ -586,8 +580,8 @@ class City:
                         neighbour[type_key] = misc_data
                     self.neighbor_info[idx] = neighbour
             elif v == 'Budget':
-                print(k, v)
-                #self.budget = Budget(data=misc_data)
+                self.budget = Budget()
+                self.budget.parse_budget(misc_data)
             elif v == 'Military Count':
                 num_items = 16
                 for idx, x in enumerate(range(offset, offset + num_items * 4, 4)):
@@ -702,34 +696,73 @@ class Budget:
     """
     Class to store budget information.
     """
-    def __init__(self, data):
-        """
-        When creating the budget object
-        Args:
-            data: raw data that needs to be parsed.
-        """
-        self.data = data
-        self.bonds = []
-        offset = 0x0FA0
+    _blank_budget = {
+        "current_count": 0,
+        "current_funding": 0,
+        "unknown": 0,
+        "jan_count": 0,
+        "jan_funding": 0,
+        'feb_funding': 0,
+        'feb_count': 0,
+        'mar_funding': 0,
+        'mar_count': 0,
+        'apr_funding': 0,
+        'apr_count': 0,
+        'may_funding': 0,
+        'may_count': 0,
+        'jun_funding': 0,
+        'jun_count': 0,
+        'jul_funding': 0,
+        'jul_count': 0,
+        'aug_funding': 0,
+        'aug_count': 0,
+        'sep_funding': 0,
+        'sep_count': 0,
+        'oct_funding': 0,
+        'oct_count': 0,
+        'nov_funding': 0,
+        'nov_count': 0,
+        'dec_funding': 0,
+        'dec_count': 0,
+    }
+    _sub_budget_indices = {'Residential': 0x077C, 'Commercial': 0x07E8, 'Industrial': 0x0854,
+                           'Bonds': 0x0930, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
+                           'Schools': 0x0ADC, 'Colleges': 0x0B48,
+                           'Road': 0x0BB4, 'Hiway': 0x0C20, 'Bridge': 0x0C8C, 'Rail': 0x0CF8, 'Subway': 0x0D64,
+                           'Tunnel': 0x0DD0}
+
+    def __init__(self):
+        self.budget_items = deepcopy(self._sub_budget_indices)
+        self.bonds = [0] * 50
         self.ordinance_flags = '0' * 20
-
-        self._sub_budget_indices = {'Property': {'Residential': [0x077C, 0x07E8], 'Commercial': [0x07E8, 0x0854], 'Industrial': [0x0854, 0x08C0]},
-                                   'Ordinances': [0x08C0, 0x08C0 + 20],
-                                   'Bonds': 0x0930, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
-                                   'Education': {'Schools': 0x0ADC, 'Colleges': 0x0B48},
-                                   'Transit': {'Road': 0x0BB4, 'Hiway': 0x0C20, 'Bridge': 0x0C8C, 'Rail': 0x0CF8,
-                                               'Subway': 0x0D64, 'Tunnel': 0x0DD0}}
-
-        self.sub_budget = deepcopy(self.sub_budget_indices)
 
     def parse_budget(self, raw_misc_data):
         """
         Parses the budget data segment from MISC into budget data.
         Args:
-            budget_data_segment (bytes): Raw segment from Misc
+            raw_misc_data (bytes): Raw segment from Misc
         """
-        pass
-        # Incomplete, obviously
+        # Ordinances
+        ordinance_raw = raw_misc_data[0x0FA0 : 0x0FA0 + 4]
+        self.ordinance_flags = int_to_bitstring(parse_uint32(ordinance_raw))
+
+        # bonds
+        start_offset = 0x0610
+        bonds_len = 50 * 4
+        self.bonds = bytes_to_int32s(raw_misc_data[start_offset : start_offset + bonds_len])
+
+        # various sub-budgets
+        sub_len = 27 * 4
+        for name, start_offset in self._sub_budget_indices.items():
+            chunk = raw_misc_data[start_offset : start_offset + sub_len]
+            sub_budget = deepcopy(self._blank_budget)
+            chunk_data = bytes_to_int32s(chunk)
+            for idx, k in enumerate(self._blank_budget):
+                sub_budget[k] = chunk_data[idx]
+            self.budget_items[name] = sub_budget
+
+
+
 
 class Tile(City):
     """

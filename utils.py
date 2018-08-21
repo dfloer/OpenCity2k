@@ -161,6 +161,21 @@ def bytes_to_uint(input_bytes):
     f = mapping[num_bytes]
     return f(input_bytes)
 
+
+def bytes_to_int32s(input_bytes):
+    """
+    Turns a sequence of bytes (must be a multiple of 4) into a list of integers.
+    Args:
+        input_bytes (bytes): bytes to convert
+    Returns:
+        List of converted signed integers.
+    """
+    res = []
+    for offset in range(0, len(input_bytes), 4):
+        res += [parse_int32(input_bytes[offset : offset +4])]
+    return res
+
+
 def trim_cstring(input_bytes):
     """
     SC2k data files have a lot of garbage in them after the end of a cstring, so this trims those bytes and returns the trimmed string.
@@ -173,5 +188,5 @@ def trim_cstring(input_bytes):
     for char in input_bytes:
         if char == 0x00:
             break
-            clean_string += chr(char)
+        clean_string += chr(char)
     return clean_string
