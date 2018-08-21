@@ -22,9 +22,24 @@ Initial foc
  - Opening and uncompressing city files.
  - Saving uncompressed and compressed city files.
  - Parsing the TEXT_USA files.
+ - Parsing SMALLMED.DAT, SPECIAL.DAT and LARGE.DAT sprite data files.
+ - Parsing MIFF files.
  
 ## Utilities
  - text_usa_parse.py: Extracts the contents of TEXT_USA.DAT. Currently very raw output.
     - `-d/--data`: the path to TEXT_USA.DAT
     - `-i/--index`: the path to TEXT_USA.IDX
     - `-t/--text`: optional path for exported text file. Omitting this will write to stdout.
+    
+  - tileset_parse.py: Extracts the contents of LARGE.DAT, SMALLMED.DAT and SPECIAL.DAT and saves them as either PNGs, or animated gifs of the colour cycling animation.
+    - `-i/--input`: Path to the directory containing the 3 data files.
+    - `-o/--output`: Path to the directory to save output in.
+    - `-p/--palette`: Path to the file containing the palette to load. Note that this will likely be `PAL_MSTR.BMP`.
+    - `-w/--write-palette`: Path and filename for the palette to be written to. Useful for debugging.
+    - `-a/--animate`: Create animated gifs of each sprite, using the game's colour cycling system for basic animations. Saved in the same output folder as specificed in `-o/--output`.
+    - `-d/--dump`: Most useful for debugging, dumps each raw frame for the animation. Saved in same output folder as animations are.
+- miff_parse.py: Turns the contents of a .mif file into their sprites, much like tileset_parse.py does.
+    - `-i/--input`: Path to the directory containing the 3 data files.
+    - `-o/--output`: Path to the directory to save output in.
+    - `-p/--palette`: Path to the file containing the palette to load.
+    - `-a/--animate`: Create animated gifs of each sprite, using the game's colour cycling system for basic animations. Saved in the same output folder as specificed in `-o/--output`.

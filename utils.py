@@ -160,3 +160,18 @@ def bytes_to_uint(input_bytes):
     mapping = {1: parse_uint8, 2: parse_uint16, 4: parse_uint32}
     f = mapping[num_bytes]
     return f(input_bytes)
+
+def trim_cstring(input_bytes):
+    """
+    SC2k data files have a lot of garbage in them after the end of a cstring, so this trims those bytes and returns the trimmed string.
+    Args:
+        input_bytes (bytes): dirty string
+    Returns:
+        Clean string.
+    """
+    clean_string = ""
+    for char in input_bytes:
+        if char == 0x00:
+            break
+            clean_string += chr(char)
+    return clean_string
