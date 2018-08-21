@@ -102,3 +102,30 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Python/temp files.
+*.py~
+.*~
+*.pyc
+*.pyo
+
+# SC2k specific stuff, don't want to accidentally commit assets.
+*.sc2
+*.out*
+*.bmp
+*.MIF
+*.SC2
+*.html
+*.txt
+*.css
+*.MID
+*.WAV
+*.PCX
+*.SCN
+*.png
+*.gif
+*.jpg
+*.WRI
+*.db
+*.DAT
+*.IDX
