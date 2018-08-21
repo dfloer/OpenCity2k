@@ -25,20 +25,41 @@ Initial foc
  - Parsing SMALLMED.DAT, SPECIAL.DAT and LARGE.DAT sprite data files.
  - Parsing MIFF files.
  
+## Libraries
+### sc2_iff_parse.py
+Basic, low-level functions for parsing IFF files, implemented for the quirks of the various formats SC2k has with its files. Also includes support for opening Mac formatted cities, something which the Win95 SC2k version lacks.\
+Considered more-or-less complete in terms of game functionality.
+
+### sc2_parse.py
+Functions to parse the raw, uncompressed data into a city and all it's associated pieces.\
+Support for parsing most of the savegame complete, but not all of it yet.
+
+### utils.py
+Helpful utility functions that get used all over.
+
+### image_parse.py
+Used to parse SC2k's internal image format.\
+Considered more-or-less complete in terms of game functionality.
+
+### tileset_parse.py
+Used to parse MIFF (.mif) tilesets.
+Considered more-or-less complete in terms of game functionality, but there could be some tilesets that it can't open out there. Testing has been limited. 
+ 
 ## Utilities
- - text_usa_parse.py: Extracts the contents of TEXT_USA.DAT. Currently very raw output.
+ - **text_usa_parse.py**: Extracts the contents of TEXT_USA.DAT. Currently very raw output.
     - `-d/--data`: the path to TEXT_USA.DAT
     - `-i/--index`: the path to TEXT_USA.IDX
     - `-t/--text`: optional path for exported text file. Omitting this will write to stdout.
     
-  - tileset_parse.py: Extracts the contents of LARGE.DAT, SMALLMED.DAT and SPECIAL.DAT and saves them as either PNGs, or animated gifs of the colour cycling animation.
+  - **tileset_parse.py**: Extracts the contents of LARGE.DAT, SMALLMED.DAT and SPECIAL.DAT and saves them as either PNGs, or animated gifs of the colour cycling animation.
     - `-i/--input`: Path to the directory containing the 3 data files.
     - `-o/--output`: Path to the directory to save output in.
     - `-p/--palette`: Path to the file containing the palette to load. Note that this will likely be `PAL_MSTR.BMP`.
     - `-w/--write-palette`: Path and filename for the palette to be written to. Useful for debugging.
     - `-a/--animate`: Create animated gifs of each sprite, using the game's colour cycling system for basic animations. Saved in the same output folder as specificed in `-o/--output`.
     - `-d/--dump`: Most useful for debugging, dumps each raw frame for the animation. Saved in same output folder as animations are.
-- miff_parse.py: Turns the contents of a .mif file into their sprites, much like tileset_parse.py does.
+    
+- **miff_parse.py**: Turns the contents of a .mif file into their sprites, much like tileset_parse.py does.
     - `-i/--input`: Path to the directory containing the 3 data files.
     - `-o/--output`: Path to the directory to save output in.
     - `-p/--palette`: Path to the file containing the palette to load.
