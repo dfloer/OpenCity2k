@@ -1,8 +1,6 @@
 import sc2_iff_parse as sc2p
-import itertools
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_str, bytes_to_uint
-import argparse
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
@@ -45,7 +43,6 @@ class City:
         self.graph_data_hack = bytearray()
         self.labels_hack = bytearray()
 
-        self.labels = {}
         self.graphs = {k: None for k in self._graph_window_graphs}
 
         # Stuff from Misc
@@ -62,14 +59,14 @@ class City:
         self.game_settings = {x: None for x in self._game_setting_names}
         self.inventions = {x: None for x in self._invention_names}
         # Minimaps
-        self.traffic = {}
-        self.pollution = {}
-        self.value = {}
-        self.crime = {}
-        self.police = {}
-        self.fire = {}
-        self.density = {}
-        self.growth = {}
+        self.traffic = Minimap("traffic", 64)
+        self.pollution = Minimap("pollution", 64)
+        self.value = Minimap("value", 64)
+        self.crime = Minimap("crime", 64)
+        self.police = Minimap("police", 32)
+        self.fire = Minimap("fire", 32)
+        self.density = Minimap("density", 32)
+        self.growth = Minimap("growth", 32)
 
         # Optional Scenario stuff
         self.is_scenario = False
@@ -104,7 +101,7 @@ class City:
                 self.value[tile_key] = parse_uint8(xval)
                 self.crime[tile_key] = parse_uint8(xcrm)
                 if self.debug:
-                    print(f"{file_key}: traffic: {self.traffic}, pollution: {self.pollution}, land value: {self.value}, crime: {self.crime}\n")
+                    print(f"{tile_key}: traffic: {parse_uint8(xtrf)}, pollution: {parse_uint8(xplt)}, land value: {parse_uint8(xval)}, crime: {parse_uint8(xcrm)}\n")
         # Minimaps that map 16 tiles to 1.
         map_size_small = self.city_size // 4
         for x in range(map_size_small):
@@ -120,7 +117,7 @@ class City:
                 self.density[tile_key] = parse_uint8(xpop)
                 self.growth[tile_key] = parse_uint8(xrog)
                 if self.debug:
-                    print(f"{tile_key}: police: {self.police}, fire: {self.fire}, densitye: {self.density}, growth: {self.growth}\n")
+                    print(f"{tile_key}: police: {parse_uint8(xplc)}, fire: {parse_uint8(xfir)}, densitye: {parse_uint8(xpop)}, growth: {parse_uint8(xrog)}\n")
 
     def create_tilelist(self, raw_sc2_data):
         """
@@ -130,21 +127,23 @@ class City:
         """
         for row in range(self.city_size):
             for col in range(self.city_size):
-                tile = Tile()
+                tile = Tile(self.traffic, self.pollution, self.value, self.crime, self.police, self.fire,  self.density, self.growth, self.labels)
                 tile_idx = row * self.city_size + col
+                tile_coords = (row, col)
+                tile.coordinates = tile_coords
                 if self.debug:
-                    print(f"index: {tile_idx}")
+                    print(f"index: {tile_idx} at {tile_coords}")
                 # First start with parsing the terrain related features.
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.altitude_water = altm[7 : 8]
-                tile.altitude_unknown = altm[8 : 10]
-                tile.altitude = altm[11 : ]
+                tile.altitude_water = bool(int(altm_bits[7 : 8], 2))
+                tile.altitude_unknown = int(altm_bits[8 : 10], 2)
+                tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altidue_tunnel = altm[0 : 7]
+                tile.altidue_tunnel = int(altm_bits[0 : 7], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -386,6 +385,7 @@ class City:
         """
         uncompressed_city = self.open_and_uncompress_sc2_file(city_path)
         self.name_city(uncompressed_city)
+        self.create_minimaps(uncompressed_city)
         self.create_tilelist(uncompressed_city)
         self.find_buildings(uncompressed_city)
         self.parse_misc(uncompressed_city["MISC"])
@@ -735,7 +735,8 @@ class Tile(City):
     """
     Stores all the information related to a tile.
     """
-    def __init__(self):
+    def __init__(self, traffic, pollution, value, crime, police, fire, density, growth, label):
+        self.coordinates = (0, 0)
         # Altitude map related values.
         self.altidue_tunnel = 0
         self.altitude_water = 0
@@ -748,37 +749,113 @@ class Tile(City):
         self.zone_corners = 0
         self.zone = 0
         self.underground = 0
+        self._label = label
         # text/signs
-        self.text_pointer = 0
+        self.text_pointer = None
         # bit flags
         self.bit_flags = None
         # minimaps/simulation stuff
-        self.traffic = 0
-        self.pollution = 0
-        self.value = 0
-        self.crime = 0
-        self.police = 0
-        self.fire = 0
-        self.density = 0
-        self.growth = 0
+        self._traffic_minimap = traffic
+        self._pollution_minimap = pollution
+        self._value_minimap = value
+        self._crime_minimap = crime
+        self._police_minimap = police
+        self._fire_minimap = fire
+        self._density_minimap = density
+        self._growth_minimap = growth
+
+    @property
+    def traffic(self):
+        return self._traffic_minimap.get_scaled(self.coordinates)
+
+    @traffic.setter
+    def traffic(self, val):
+        self._traffic_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def pollution(self):
+        return self._pollution_minimap.get_scaled(self.coordinates)
+
+    @pollution.setter
+    def pollution(self, val):
+        self._pollution_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def value(self):
+        return self._value_minimap.get_scaled(self.coordinates)
+
+    @value.setter
+    def value(self, val):
+        self._value_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def crime(self):
+        return self._crime_minimap.get_scaled(self.coordinates)
+
+    @crime.setter
+    def crime(self, val):
+        self._crime_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def police(self):
+        return self._police_minimap.get_scaled(self.coordinates)
+
+    @police.setter
+    def police(self, val):
+        self._police_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def fire(self):
+        return self._fire_minimap.get_scaled(self.coordinates)
+
+    @fire.setter
+    def fire(self, val):
+        self._fire_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def density(self):
+        return self._density_minimap.get_scaled(self.coordinates)
+
+    @density.setter
+    def density(self, val):
+        self._density_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def growth(self):
+        return self._growth_minimap.get_scaled(self.coordinates)
+
+    @growth.setter
+    def growth(self, val):
+        self._growth_minimap.set_scaled(self.coordinates, val)
+
+    @property
+    def text(self):
+        return self._label[self.text_pointer]
+
+    @text.setter
+    def text(self, val):
+        self._label[self.text_pointer] = val
 
     def __str__(self):
-        s = f"Altitude:\n    tunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s = f"Tile at {self.coordinates}\n"
+        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
         s += f"Terrain: {terr}\n"
         # City stuff
-        corners = int_to_bitstring(self.zone_corners)
         try:
             b_id = self.building.building_id
         except:
             b_id = "None"
-        s += f"Buildings:\n    id: {b_id}, corners {corners}, zone: {self.zone}, underground: {self.underground}\n"
+        s += f"Buildings:\n\tid: {b_id}, corners {self.zone_corners}, zone: {self.zone}, underground: {self.underground}\n"
         # text/signs
-        s += f"Text pointer: {self.text_pointer}"
+        sign_text = ''
+        if self.text_pointer:
+            sign_text = f", Sign: \"{self.text}\""
+        s += f"Text pointer: {self.text_pointer}{sign_text}\n"
         # bit flags
         s += f"Flags: {self.bit_flags}\n"
         # minimaps/simulation stuff
-        s += f"Minimap:\n      Traffic: {self.traffic}, pollution: {self.pollution}, value: {self.value}, crime: {self.crime}, police: {self.police}, fire: {self.fire}, density: {self.density}, growth: {growth}."
+        s += f"Minimap:\n\tTraffic: {self.traffic}, pollution: {self.pollution}, value: {self.value}, crime: {self.crime}, police: {self.police}, fire: {self.fire}, density: {self.density}, growth: {self.growth}."
         return s
 
 
@@ -832,4 +909,49 @@ class Graph:
         s = f"Year:\n\t{[x for x in self.one_year]}.\n"
         s += f"10 Years:\n\t{[x for x in self.ten_years]}.\n"
         s += f"100 Years:\n\t{[x for x in self.hundred_years]}.\n"
+        return s
+
+
+class Minimap:
+    """
+    Couldn't think of a better name, but this stores minimap info/simulation variables stores in:
+    XTRF, XPLT, XVAL, XCRM, XPLC, XFIR, XPOP, XROG.
+    """
+    _x64 = ["XTRF", "XPLT", "XVAL", "XCRM"]
+    _x32 = ["XPLC", "XFIR", "XPOP", "XROG"]
+
+    def __init__(self, name='', size=0):
+        self.name = name
+        self.data = {}
+        self.size = size
+
+    def convert_xy(self, key):
+        x, y = key
+        d = 4
+        if self.size == 64:
+            d = 2
+        x //= d
+        y //= d
+        return (x, y)
+
+    def get_scaled(self, key):
+        new_key = self.convert_xy(key)
+        return self.data[new_key]
+
+    def set_scaled(self, key, item):
+        new_key = self.convert_xy(key)
+        self.data[new_key] = item
+
+    def __setitem__(self, key, value):
+        self.data[key] = value
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __str__(self):
+        s = f"{self.name}:\n "
+        for x in range(self.size):
+            for y in range(self.size):
+                s += f"{y} "
+            s += '\n'
         return s
