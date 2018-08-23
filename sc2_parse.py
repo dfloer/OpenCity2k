@@ -130,7 +130,7 @@ class City:
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.altitude_water = bool(int(altm_bits[7 : 8], 2))
+                tile.is_water = bool(int(altm_bits[7: 8], 2))
                 tile.altitude_unknown = int(altm_bits[8 : 10], 2)
                 tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
@@ -772,7 +772,7 @@ class Tile(City):
         self.coordinates = (0, 0)
         # Altitude map related values.
         self.altidue_tunnel = 0
-        self.altitude_water = 0
+        self.is_water = 0
         self.altitude_unknown = 0
         self.altitude = 0
         # Terrain
@@ -871,9 +871,9 @@ class Tile(City):
 
     def __str__(self):
         s = f"Tile at {self.coordinates}\n"
-        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
-        s += f"Terrain: {terr}\n"
+        s += f"Terrain: {self.terrain}: {terr}\n"
         # City stuff
         try:
             b_id = self.building.building_id
