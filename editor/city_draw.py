@@ -8,10 +8,10 @@ import sc2_parse as sc2p
 
 TILE_WIDTH = main.TILE_WIDTH
 TILE_HEIGHT = main.TILE_HEIGHT
-ALTITUDE_OFFSET = 3
+ALTITUDE_OFFSET = 4
 
 
-def convert_iso_to_screen(row_idx, col_idx, width, altitude):
+def convert_iso_to_screen(row_idx, col_idx, width, altitude, layer=0):
     """
     Converts a row and column index into screen coordinates.
        /\       Tile 1 has coordinates (0, 0).
@@ -30,14 +30,14 @@ def convert_iso_to_screen(row_idx, col_idx, width, altitude):
     screen_y = -((row_idx + col_idx) * TILE_HEIGHT // 2) - height_offset - altitude_offset
     # This'll need to handle z as well.
     a, b = main.convert_pixel_to_screen(screen_x, screen_y)
-    screen_z = 100  # todo: handle this properly.
+    screen_z = 100 + layer  # todo: handle this properly.
     return a, screen_z, b
 
 
-def set_idx_pos(sprite, sprite_width, row, col, alt):
+def set_idx_pos(sprite, sprite_width, row, col, alt, lay):
     row -= alt
     col -= alt
-    p = convert_iso_to_screen(row, col, sprite_width, alt)
+    p = convert_iso_to_screen(row, col, sprite_width, alt, lay)
     sprite.setPos(p)
 
 

@@ -14,7 +14,7 @@ import city_draw as cd
 
 sys.path.append('..')
 
-loadPrcFile("config.prc")
+loadPrcFile("./Config.prc")
 
 Point = namedtuple("Point", ['x', 'y'])
 TILE_WIDTH = 32  # Width of a tile in pixels.
@@ -109,6 +109,14 @@ class OpenCity2k(ShowBase):
         print(f"{datetime.now()}: Sprites loaded.")
         self.draw_terrain()
         print(f"{datetime.now()}: Terrain drawn.")
+        self.draw_zones()
+        print(f"{datetime.now()}: Zones drawn.")
+        self.draw_groundcover()
+        print(f"{datetime.now()}: Trees drawn.")
+        self.draw_networks()
+        print(f"{datetime.now()}: Networks drawn.")
+        self.draw_buildings()
+        print(f"{datetime.now()}: Buildings drawn.")
 
         # self.terrain_root = render.attachNewNode("terrain root")
         # self.buildings_root = render.attachNewNode("buildings root")
@@ -119,27 +127,88 @@ class OpenCity2k(ShowBase):
             self.sprites[sprite_id] = sprite
 
     def draw_terrain(self):
-        # sea_level = self.city.city_attributes["GlobalSeaLevel"]
-        sea_level = 6
+        # Todo: sloped need some pixel twiddling. Ugh
+        sea_level = self.city.simulator_settings["GlobalSeaLevel"]
         for row in range(127, -1, -1):
             for col in range(127, -1, -1):
                 tile = self.city.tilelist[(row, col)]
                 terrain_id = 1000 + cd.terrain_to_id(tile)
-                if row == 13 and col == 9:
-                    print(tile)
-
                 alt = tile.altitude
                 if alt < sea_level:
                     alt = sea_level
+                    if tile.terrain == 0x0D:
+                        alt -= 1
                 s = self.sprites[terrain_id]
                 x = render.attachNewNode(f"{row}, {col}: {terrain_id}")
-                cd.set_idx_pos(x, s.width, row, col, alt)
+                cd.set_idx_pos(x, s.width, row, col, alt, 0)
                 s.instanceTo(x)
+
+    def draw_groundcover(self):
+        to_draw_k = self.city.groundcover.keys()
+        draw_order = sorted([x for x in to_draw_k], reverse=True)
+        for k in draw_order:
+            building = self.city.groundcover[k]
+            alt = self.city.tilelist[k].altitude
+            building_id = 1000 + building.building_id
+            s = self.sprites[building_id]
+            x = render.attachNewNode(f"{k}: {building_id}")
+            cd.set_idx_pos(x, s.width, k[0], k[1], alt, -2)
+            s.instanceTo(x)
+
+    def draw_networks(self):
+        # todo: handle roads on hills.
+        to_draw_k = self.city.networks.keys()
+        draw_order = sorted([x for x in to_draw_k], reverse=True)
+        for k in draw_order:
+            building = self.city.networks[k]
+            sea_level = self.city.simulator_settings["GlobalSeaLevel"]
+            alt = max(sea_level, self.city.tilelist[k].altitude)
+            tile = self.city.tilelist[k]
+            if tile.terrain == 0x0D:
+                alt += 1
+            if tile.bit_flags.rotate:
+                # Todo: rotate
+                pass
+            building_id = 1000 + building.building_id
+            s = self.sprites[building_id]
+            x = render.attachNewNode(f"{k}: {building_id}")
+            cd.set_idx_pos(x, s.width, k[0], k[1], alt, -20)
+            s.instanceTo(x)
+
+    def draw_buildings(self):
+        to_draw_k = self.city.buildings.keys()
+        draw_order = sorted([x for x in to_draw_k], reverse=True)
+        for k in draw_order:
+            building = self.city.buildings[k]
+            tile = self.city.tilelist[k]
+            sea_level = self.city.simulator_settings["GlobalSeaLevel"]
+            alt = max(sea_level, self.city.tilelist[k].altitude)
+            if tile.bit_flags.rotate:
+                # Todo: rotate
+                pass
+            building_id = 1000 + building.building_id
+            s = self.sprites[building_id]
+            x = render.attachNewNode(f"{k}: {building_id}")
+            cd.set_idx_pos(x, s.width, k[0], k[1], alt, -50)
+            s.instanceTo(x)
+
+    def draw_zones(self):
+        for row in range(127, -1, -1):
+            for col in range(127, -1, -1):
+                tile = self.city.tilelist[(row, col)]
+                alt = self.city.tilelist[(row, col)].altitude
+                zone = tile.zone
+                if zone != 0:
+                    sprite_id = 1290 + zone
+                    s = self.sprites[sprite_id]
+                    x = render.attachNewNode(f"{row}, {col}: {sprite_id}")
+                    cd.set_idx_pos(x, s.width, row, col, alt, -1)
+                    s.instanceTo(x)
 
     def camera_setup(self):
         lens = OrthographicLens()
         self.cam.node().setLens(lens)
-        self.cam.setPos(0, 0, 0)
+        self.cam.setPos(-.25, 0, -1.75)
 
     def mover(self, to_move):
         curr = to_move.getPos()
@@ -158,6 +227,8 @@ class OpenCity2k(ShowBase):
             to_move.setPos((curr[0], curr[1], curr[2] + inc))
         elif self.is_down('z'):
             to_move.setPos((0, 0, 0))
+        elif self.is_down('x'):
+            print(to_move.getPos())
 
     def resize(self, args):
         # print(f"Window resized to: {args}.")

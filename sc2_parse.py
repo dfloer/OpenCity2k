@@ -309,7 +309,7 @@ class City:
         # Todo: Check this:
         left_corner = 0b1000
 
-        groundcover_ids = list(range(0x00, 0x0D + 1))
+        groundcover_ids = list(range(0x01, 0x0D + 1))
         network_ids = list(range(0x0E, 0x79 + 1))
 
         raw_xbld = raw_sc2_data["XBLD"]
@@ -354,14 +354,16 @@ class City:
                         new_building = Building(building_id, (row, col))
                         self.groundcover[(row, col)] = new_building
                         self.tilelist[(row, col)].building = new_building
-                        if self.debug:
-                            print(f"Found groundcover: {building_id} at ({row}, {col})")
+                        # if self.debug:
+                        # print(f"Found groundcover: {building_id} at ({row}, {col})")
+                        # print(len(self.groundcover))
                     elif building_id in network_ids:
                         new_building = Building(building_id, (row, col))
-                        self.groundcover[(row, col)] = new_building
+                        self.networks[(row, col)] = new_building
                         self.tilelist[(row, col)].building = new_building
-                        if self.debug:
-                            print(f"Found network: {building_id} at ({row}, {col})")
+                        # if self.debug:
+                        # print(f"Found network: {building_id} at ({row}, {col})")
+                        # print(len(self.networks))
                     else:
                         if self.debug:
                             print(f"Tile parsing fallthrough at ({building_x}, {building_y}) with id: {new_building_id}")
