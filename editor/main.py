@@ -230,12 +230,20 @@ class OpenCity2k(ShowBase):
         elif self.is_down('x'):
             print(to_move.getPos())
 
+    def click(self):
+        if self.is_down("mouse3"):
+            screen_x = base.mouseWatcherNode.getMouseX()
+            screen_y = base.mouseWatcherNode.getMouseY()
+            iso_x, iso_y = cd.convert_screen_to_iso(screen_x, screen_y)
+            print(screen_x, iso_x, screen_y, iso_y)
+
     def resize(self, args):
         # print(f"Window resized to: {args}.")
         self.draw_terrain()
 
     def gameLoop(self, task):
         self.mover(self.camera)
+        self.click()
         # self.accept('window-event', self.resize)
         return Task.cont
 

@@ -1749,6 +1749,13 @@ tile_data = {
     }
 }
 
+"""
+The purpose of these is to make looking up certain ids easier. This should probably be stored in the tile_data.
+"""
+rotated_buildings = [x for x in range(112, 256)]
+hwy_slope = [x for x in range(97, 101)]
+traffic_tiles = {29: 400, 30: 401, 31: 402, 32: 403, 33: 404, 34: 405, 35: 406, 36: 407, 37: 408, 38: 409, 39: 401, 40: 400, 41: 401, 42: 400, 43: 401, 67: 400, 68: 401, 69: 400, 70: 401, 73: 410, 74: 411, 75: 410, 76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419, 99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
+
 
 # Section with nice functions to access the data contained here.
 def get_size(building_id):

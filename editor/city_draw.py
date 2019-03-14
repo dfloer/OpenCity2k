@@ -34,13 +34,29 @@ def convert_iso_to_screen(row_idx, col_idx, width, altitude, layer=0):
     return a, screen_z, b
 
 
+def convert_screen_to_iso(screen_x, screen_y):
+    """
+    Converts screen coordinates to the isometric tile coordinates.
+    This does not take altitude into account.
+    Args:
+        screen_x (float): screen coordinate x
+        screen_y (float): screen coordinate y
+    Returns:
+        (x, y) tuple containing the isometric tile coordinates.
+    """
+    w = 800
+    h = 600
+    iso_x = ((screen_y * 2 / TILE_HEIGHT) + (screen_x / TILE_WIDTH)) / 2
+    iso_y = (screen_y * 2 / TILE_HEIGHT) - iso_x
+    return iso_x, iso_y
+
+
+
 def set_idx_pos(sprite, sprite_width, row, col, alt, lay):
     row -= alt
     col -= alt
     p = convert_iso_to_screen(row, col, sprite_width, alt, lay)
     sprite.setPos(p)
-
-
 
 
 class City(sc2p.City):
