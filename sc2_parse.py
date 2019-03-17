@@ -130,7 +130,7 @@ class City:
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.altitude_water = bool(int(altm_bits[7 : 8], 2))
+                tile.is_water = bool(int(altm_bits[7 : 8], 2))
                 tile.altitude_unknown = int(altm_bits[8 : 10], 2)
                 tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
@@ -309,7 +309,7 @@ class City:
         # Todo: Check this:
         left_corner = 0b1000
 
-        groundcover_ids = list(range(0x00, 0x0D + 1))
+        groundcover_ids = list(range(0x01, 0x0D + 1))
         network_ids = list(range(0x0E, 0x79 + 1))
 
         raw_xbld = raw_sc2_data["XBLD"]
@@ -333,12 +333,12 @@ class City:
                     if building_size == 1:
                         continue
                     # The clamping to 127 is to deal with certain industrial 3x3 buildings that glitch out on the edge of the map.
-                    for building_x in range(row + 1, min(row + building_size, 127)):
-                        for building_y in range(col + 1, min(col + building_size, 127)):
+                    for building_x in range(row, min(row + building_size + 1, 127)):
+                        for building_y in range(col, col - building_size, -1):
                             next_tile_idx = building_x * self.city_size + building_y
                             new_building_id = raw_xbld[next_tile_idx]
                             if new_building_id == building_id:
-                                self.tilelist[(row, col)].building = new_building
+                                self.tilelist[(building_x, building_y)].building = new_building
                                 if self.debug:
                                     print(f"Added Building: {new_building_id} at ({building_x}, {building_y})")
                             else:
@@ -358,7 +358,7 @@ class City:
                             print(f"Found groundcover: {building_id} at ({row}, {col})")
                     elif building_id in network_ids:
                         new_building = Building(building_id, (row, col))
-                        self.groundcover[(row, col)] = new_building
+                        self.networks[(row, col)] = new_building
                         self.tilelist[(row, col)].building = new_building
                         if self.debug:
                             print(f"Found network: {building_id} at ({row}, {col})")
@@ -772,7 +772,7 @@ class Tile(City):
         self.coordinates = (0, 0)
         # Altitude map related values.
         self.altidue_tunnel = 0
-        self.altitude_water = 0
+        self.is_water = 0
         self.altitude_unknown = 0
         self.altitude = 0
         # Terrain
