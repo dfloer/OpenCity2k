@@ -55,6 +55,12 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             if i < city_size and j < city_size:
                 render_order += [(i, j)]
     for k in render_order:
+        # Draw the edge if we're on the edge of the map.
+        if k[0] == 127 or k[1] == 127:
+            edge_stack = draw_edge(city, sprites, k)[k]
+            edge_image = edge_stack["image"]
+            edge_position = edge_stack["pixel"]
+            terrain_layer_image.paste(edge_image, edge_position, edge_image)
         terrain_tile = terrain_layer[k]
         terrain_image = terrain_tile["image"]
         position = terrain_tile["pixel"]
@@ -259,6 +265,10 @@ def create_network_layer(city, sprites):
     Returns:
         Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
     """
+    traffic_tiles = {29: 400, 30: 401, 31: 402, 32: 403, 33: 404, 34: 405, 35: 406, 36: 407, 37: 408, 38: 409, 39: 401,
+                     40: 400, 41: 401, 42: 400, 43: 401, 67: 400, 68: 401, 69: 400, 70: 401, 73: 410, 74: 411, 75: 410,
+                     76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419,
+                     99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
     network_sprites = {}
     for k in city.networks.keys():
         row, col = k
@@ -279,7 +289,14 @@ def create_network_layer(city, sprites):
         shift = altitude * layer_offset
         if terrain == 0x0D:
             shift += layer_offset
-
+        if building_id in traffic_tiles.keys():
+            traffic_image = get_traffic_image(tile, sprites)
+            if traffic_image:
+                traffic_image_offset = image.size[1] - traffic_image.size[1]
+                # Note that this simple paste doesn't quite work like the game does.
+                # It only composits the traffic if the pixel it's compositing to is the grey road colour.
+                # This is so that it doesn't draw traffic on top of power lines, railroad tracks and crosswalks.
+                image.paste(traffic_image, (0, traffic_image_offset), traffic_image)
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
 
@@ -287,6 +304,79 @@ def create_network_layer(city, sprites):
         j = (row * 8 + col * 8) + h_offset + shift - extra
         network_sprites[(row, col)] = {"pixel": (i, j), "image": image}
     return network_sprites
+
+
+def get_traffic_image(tile, sprites):
+    """
+    Gets the traffic image for a certain tile.
+    Traffic threshold values pulled from the game. First value is from (visually) no traffic to normal traffic, and the second is the traffic value to go from normal traffic to heavy traffic.
+    Args:
+        tile (Tile): tile to get the traffic image for.
+        sprites (dict): id: Image dictionary of sprites to use.
+    Returns:
+        Image with the traffic overlay.
+    """
+    traffic_tiles = {29: 400, 30: 401, 31: 402, 32: 403, 33: 404, 34: 405, 35: 406, 36: 407, 37: 408, 38: 409, 39: 401,
+                     40: 400, 41: 401, 42: 400, 43: 401, 67: 400, 68: 401, 69: 400, 70: 401, 73: 410, 74: 411, 75: 410,
+                     76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419,
+                     99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
+    traffic = tile.traffic
+    rotate = tile.bit_flags.rotate
+    heavy_offset = 27  # offset from the start that the heavy version of the traffic sprite is used.
+    # Traffic threshold values. These should probably be moved to a data file or something as they're a mechanic and not part of this renderer.
+    hwy_threshold = [30, 58]
+    road_threshold = [86, 172]
+    building_id = tile.building.building_id
+    if building_id < 44:
+        threshold = road_threshold
+    else:
+        threshold = hwy_threshold
+    if traffic < threshold[0]:
+        return None
+    elif traffic > threshold[1]:
+        tile_id = traffic_tiles[building_id] + heavy_offset + 1000
+    else:
+        tile_id = traffic_tiles[building_id] + 1000
+    tile_image = sprites[tile_id]
+    if tile_id in (411, 438):
+        tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
+    # Onramps behave a little strangely, this is a fix for them.
+    if rotate not in [1, 3] and building_id in [93, 94, 95, 96]:
+        tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
+    return tile_image
+
+
+def draw_edge(city, sprites, position):
+    """
+    draws the edge stack image, made of water and land edge tiles.
+    Args:
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        position (tuple): (x, y) coordinate pair for where to generate the edge stack from.
+    Returns:
+        Returns an image containing the stack.
+    """
+    water_edge_id = 1284
+    land_edge_id = 1269
+    tile = city.tilelist[position]
+    altitude = tile.altitude
+    row, col = position
+    water_table_level = city.simulator_settings["GlobalSeaLevel"]
+    stack_height = abs(layer_offset * altitude)
+    if altitude < water_table_level:
+        stack_height += abs(layer_offset * (water_table_level - altitude))
+    image = Image.new('RGBA', (32, stack_height + 17), (0, 0, 0, 0))
+    for a in range(altitude):
+        j = stack_height + (a + 1) * layer_offset
+        land_edge = sprites[land_edge_id]
+        image.paste(land_edge, (0, j), land_edge)
+    for a in range(altitude, water_table_level):
+        j = stack_height + (a + 1) * layer_offset
+        water_edge = sprites[water_edge_id]
+        image.paste(water_edge, (0, j), water_edge)
+    a = (row * 16 - col * 16) + w_offset
+    b = (row * 8 + col * 8) + h_offset - stack_height
+    return {position: {"pixel": (a, b), "image": image}}
 
 
 def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False):
