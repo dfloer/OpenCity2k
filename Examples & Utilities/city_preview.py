@@ -46,8 +46,14 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
     tilelist = city.tilelist
 
     # This is the order to render all of the tiles in. It still needs tweaking to get correct.
-    render_order = [(col, row) for row in range(128) for col in range(128)]
-
+    render_order = []
+    city_size = city.city_size
+    # This is diagonal rendering.
+    for k in range(city_size * 2):
+        for j in range(k + 1):
+            i = k - j
+            if i < city_size and j < city_size:
+                render_order += [(i, j)]
     for k in render_order:
         terrain_tile = terrain_layer[k]
         terrain_image = terrain_tile["image"]
