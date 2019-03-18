@@ -55,6 +55,12 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             if i < city_size and j < city_size:
                 render_order += [(i, j)]
     for k in render_order:
+        # Draw the edge if we're on the edge of the map.
+        if k[0] == 127 or k[1] == 127:
+            edge_stack = draw_edge(city, sprites, k)[k]
+            edge_image = edge_stack["image"]
+            edge_position = edge_stack["pixel"]
+            terrain_layer_image.paste(edge_image, edge_position, edge_image)
         terrain_tile = terrain_layer[k]
         terrain_image = terrain_tile["image"]
         position = terrain_tile["pixel"]
@@ -287,6 +293,39 @@ def create_network_layer(city, sprites):
         j = (row * 8 + col * 8) + h_offset + shift - extra
         network_sprites[(row, col)] = {"pixel": (i, j), "image": image}
     return network_sprites
+
+
+def draw_edge(city, sprites, position):
+    """
+    draws the edge stack image, made of water and land edge tiles.
+    Args:
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        position (tuple): (x, y) coordinate pair for where to generate the edge stack from.
+    Returns:
+        Returns an image containing the stack.
+    """
+    water_edge_id = 1284
+    land_edge_id = 1269
+    tile = city.tilelist[position]
+    altitude = tile.altitude
+    row, col = position
+    water_table_level = city.simulator_settings["GlobalSeaLevel"]
+    stack_height = abs(layer_offset * altitude)
+    if altitude < water_table_level:
+        stack_height += abs(layer_offset * (water_table_level - altitude))
+    image = Image.new('RGBA', (32, stack_height + 17), (0, 0, 0, 0))
+    for a in range(altitude):
+        j = stack_height + (a + 1) * layer_offset
+        land_edge = sprites[land_edge_id]
+        image.paste(land_edge, (0, j), land_edge)
+    for a in range(altitude, water_table_level):
+        j = stack_height + (a + 1) * layer_offset
+        water_edge = sprites[water_edge_id]
+        image.paste(water_edge, (0, j), water_edge)
+    a = (row * 16 - col * 16) + w_offset
+    b = (row * 8 + col * 8) + h_offset - stack_height
+    return {position: {"pixel": (a, b), "image": image}}
 
 
 def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False):
