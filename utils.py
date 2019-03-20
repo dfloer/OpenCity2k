@@ -64,6 +64,17 @@ def parse_int32(unparsed_bytes):
     return unpack('>i', unparsed_bytes)[0]
 
 
+def serialize_int32(integer):
+    """
+    Serialized an integer into a 4-bytes int32.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation
+    """
+    return pack('>i', integer)
+
+
 def parse_uint32(unparsed_bytes):
     """
     Parses 4 bytes into a big endian unsigned integer.
@@ -73,6 +84,17 @@ def parse_uint32(unparsed_bytes):
         Integer representation.
     """
     return unpack('>I', unparsed_bytes)[0]
+
+
+def serialize_uint32(integer):
+    """
+    Serialized an integer into a 4-bytes unsigned int32.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation
+    """
+    return pack('>I', integer)
 
 
 def parse_uint16(unparsed_bytes):

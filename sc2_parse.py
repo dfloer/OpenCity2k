@@ -1,6 +1,8 @@
 import sc2_iff_parse as sc2p
+import sc2_serialize as sc2s
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
+from utils import serialize_int32
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
@@ -577,7 +579,7 @@ class City:
                     neighbour = collections.OrderedDict()
                     for x in range(start_offset, start_offset + 16, 4):
                         type_key = neighbour_types[((x + 8) % 16) // 4]
-                        neighbour[type_key] = misc_data
+                        neighbour[type_key] = parse_int32(misc_data[x : x + 4])
                     self.neighbor_info[idx] = neighbour
             elif v == 'Budget':
                 self.budget = Budget()
@@ -622,13 +624,69 @@ class City:
             A dictionary with the key being .
         """
         num_keys = len(keys)
-        values = [[] for x in range(num_keys)]
+        values = [[] for _ in range(num_keys)]
         for idx, val in enumerate(range(offset, offset + length, 4)):
-            values[idx % num_keys].extend(misc_data)
+            data = parse_int32(misc_data[offset : offset + 4])
+            values[idx % num_keys].extend([data])
+            offset += 4
         output = {}
         for idx, key_name in enumerate(keys):
             output[key_name] = values[idx]
         return output
+
+    def serialize(self):
+        """
+        Creates the bytes representing a .sc2 file to save.
+        Returns:
+            Bytes representing a serialized .sc2 file to save.
+        """
+        uncompressed_segments = {}
+        uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
+        #uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
+        test = sc2s.serialize_misc(self)
+        # uncompressed_segments["ALTM"] =
+        # uncompressed_segments["XTER"] =
+        # uncompressed_segments["XBLD"] =
+        # uncompressed_segments["XZON"] =
+        # uncompressed_segments["XUND"] =
+        # uncompressed_segments["XTXT"] =
+        # uncompressed_segments["XLAB"] =
+        # uncompressed_segments["XMIC"] =
+        # uncompressed_segments["XTHG"] =
+        # uncompressed_segments["XBIT"] =
+        # uncompressed_segments["XTRF"] =
+        # uncompressed_segments["XPLT"] =
+        # uncompressed_segments["XVAL"] =
+        # uncompressed_segments["XCRM"] =
+        # uncompressed_segments["XPLC"] =
+        # uncompressed_segments["XFIR"] =
+        # uncompressed_segments["XPOP"] =
+        # uncompressed_segments["XROG"] =
+        # uncompressed_segments["XGRP"] =
+        if self.is_scenario:
+            pass
+            # uncompressed_segments["TEXT"] =
+            # uncompressed_segments["SCEN"] =
+            # uncompressed_segments["PICT"] =
+        compressed_segments = {}
+        for segment_name, segment_data in uncompressed_segments.items():
+            compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
+        output_bytes = bytearray()
+        for segment_name, segment_data in compressed_segments.items():
+            segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
+            output_bytes += bytearray(segment_header + segment_data)
+        return output_bytes
+
+    def save_city(self, path):
+        """
+        Save this city to a given path.
+        Args:
+            path (str): path to save the city to.
+        Returns:
+            Nothing, but saves the city at the given path.
+        """
+        with open(path, 'wb') as f:
+            f.write(self.serialize())
 
 
 class Building:
