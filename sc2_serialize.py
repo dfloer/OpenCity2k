@@ -133,7 +133,7 @@ def serialize_misc(city):
         '0x104c': 'SewerBonus',
         '0x1050': 'Extra', }
     handle_special = ['Population Graphs', 'Industry Graphs', 'Tile Counts', 'Bonds', 'Neighbours', 'Budget',
-                      'Military Count', 'Paper List', 'News List', 'Extra']
+                      'Military Count', 'Paper List', 'News List', 'Extra', 'Ordinances']
     handle_special += list(city.simulator_settings.keys()) + list(city.game_settings.keys()) + list(city.inventions.keys())
     output_bytes = bytearray(b"\x00" * 4800)
     for k, v in parse_order.items():
@@ -155,9 +155,11 @@ def serialize_misc(city):
                 output_bytes[offset : offset + 4] = data
                 offset += 4
         elif v == 'Bonds':
-            print("Bonds.")
-        #     bonds_data = city.serialize_budget_bonds()
-        #     output_bytes[offset : offset + len(bonds_data] = bonds_data
+            bonds_data = city.budget.serialize_bonds()
+            output_bytes[offset : offset + len(bonds_data)] = bonds_data
+        elif v == 'Ordinances':
+            data = city.budget.serialize_ordinances()
+            output_bytes[offset : offset + 4] = data
         elif v == 'Neighbours':
             for n in city.neighbor_info.values():
                 for e in n.values():
@@ -165,9 +167,8 @@ def serialize_misc(city):
                     output_bytes[offset: offset + 4] = data
                     offset += 4
         elif v == 'Budget':
-            print("Budget.")
-        #     budget_data = city.serialize_budget()
-        #     output_bytes[offset : offset + len(budget_data] = budget_data
+            budget_data = city.budget.serialize_budget()
+            output_bytes[offset : offset + len(budget_data)] = budget_data
         elif v == 'Military Count':
             num_items = 16
             for x in range(num_items):
@@ -200,9 +201,9 @@ def serialize_misc(city):
         elif v in list(city.inventions.keys()):
             data = serialize_uint32(city.inventions[v])
             output_bytes[offset: offset + 4] = data
-        # else:
-        #     # Fallthrough, this should never, ever, be hit.
-        #     print("MISC is missing something!", k, v)
+        else:
+            # Fallthrough, this should never, ever, be hit.
+            print("MISC is missing something!", k, v)
 
 
 def interleave_data(data):

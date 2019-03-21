@@ -2,7 +2,7 @@ import sc2_iff_parse as sc2p
 import sc2_serialize as sc2s
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
-from utils import serialize_int32
+from utils import serialize_int32, serialize_uint32
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
@@ -547,7 +547,7 @@ class City:
             '0x104c': 'SewerBonus',
             '0x1050': 'Extra', }
         handle_special = ['Population Graphs', 'Industry Graphs', 'Tile Counts', 'Bonds', 'Neighbours', 'Budget',
-                          'Military Count', 'Paper List', 'News List', 'Extra'] + list(
+                          'Military Count', 'Paper List', 'News List', 'Extra', 'Ordinances'] + list(
             self.simulator_settings.keys()) + list(self.game_settings.keys()) + list(self.inventions.keys())
 
         # Make sure the dict is sorted because following code requires the sorting.
@@ -568,7 +568,7 @@ class City:
                 for x in range(0, 256):
                     self.building_count[x] = parse_int32(misc_data[offset: offset + 4])
                     offset += 4
-            elif v == 'Bonds':
+            elif v in ('Bonds', 'Ordinances'):
                 # Handled along with the budget.
                 continue
             elif v == 'Neighbours':
@@ -802,7 +802,7 @@ class Budget:
         """
         # Ordinances
         ordinance_raw = raw_misc_data[0x0FA0 : 0x0FA0 + 4]
-        self.ordinance_flags = int_to_bitstring(parse_uint32(ordinance_raw))
+        self.ordinance_flags = [int(x) for x in int_to_bitstring(parse_uint32(ordinance_raw))]
 
         # bonds
         start_offset = 0x0610
@@ -819,7 +819,40 @@ class Budget:
                 sub_budget[k] = chunk_data[idx]
             self.budget_items[name] = sub_budget
 
+    def serialize_budget(self):
+        """
+        Serializes the budget into bytes.
+        Returns:
+            Bytearray representing the budget for saving to a .sc2 file.
+        """
+        output = bytearray()
+        for sub_budget in self.budget_items.values():
+            for e in sub_budget.values():
+                output += bytearray(serialize_int32(e))
+        return output
 
+    def serialize_bonds(self):
+        """
+        Serializes the 50 bonds into bytes.
+        Returns:
+            50 x 4B ints representing all of the bonds.
+        """
+        data = bytearray()
+        for bond in self.bonds:
+            data += bytearray(serialize_uint32(bond))
+        return data
+
+    def serialize_ordinances(self):
+        """
+        Convert the ordinance flags to their 4-byte integer representation.
+        Returns:
+            Byte representation of the ordinance flags.
+        """
+        # Bitshifting to convert the list of 0/1s to an int.
+        bits = 0
+        for bit in self.ordinance_flags:
+            bits = (bits << 1) | bit
+        return serialize_int32(bits)
 
 
 class Tile(City):
