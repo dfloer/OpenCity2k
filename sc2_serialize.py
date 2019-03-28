@@ -1,5 +1,5 @@
 import sc2_parse as sc2p
-from utils import serialize_int32, serialize_uint32
+from utils import serialize_int32, serialize_uint32, serialize_uint16, serialize_uint8, int_to_n_bits
 
 
 def name_to_cnam(city_name):
@@ -14,6 +14,7 @@ def name_to_cnam(city_name):
         city_name = city_name[: 31]
     data = bytearray(b'\x1F' + bytes(city_name, 'ascii') + b'\x00' * (31 - len(city_name)))
     return data
+
 
 def serialize_misc(city):
     """
@@ -204,6 +205,7 @@ def serialize_misc(city):
         else:
             # Fallthrough, this should never, ever, be hit.
             print("MISC is missing something!", k, v)
+    return output_bytes
 
 
 def interleave_data(data):
@@ -221,3 +223,80 @@ def interleave_data(data):
         for a in [serialize_int32(a[x]) for a in data]:
             output += bytearray(a)
     return output
+
+
+def serialize_tile_data(city, which_tile):
+    """
+
+    Args:
+        city (City): city to serialize the tiles from.
+        which_tile (str): which tile type are we serializing?
+            Possibile types: ALTM, XTER, XUND, XZON, XTXT, XBIT.
+    Returns:
+        Bytearray representation of the tiles.
+    """
+    tilelist = city.tilelist
+    output_bytes = bytearray()
+    for tile in tilelist.values():
+        if which_tile == "ALTM":
+            bit_string = ''
+            bit_string += int_to_n_bits(tile.altidue_tunnel, 8)
+            bit_string += int_to_n_bits(tile.is_water, 1)
+            bit_string += int_to_n_bits(tile.altitude_unknown, 2)
+            bit_string += int_to_n_bits(tile.altitude, 5)
+            altidude_map = int(bit_string, 2)
+            tile_data = serialize_uint16(altidude_map)
+        elif which_tile == "XUND":
+            tile_data = serialize_uint8(tile.underground)
+        elif which_tile == "XTER":
+            tile_data = serialize_uint8(tile.terrain)
+        elif which_tile == "XZON":
+            tile_data = serialize_uint8(tile.zone)
+        elif which_tile == "XTXT":
+            tile_data = serialize_uint8(tile.text_pointer)
+        elif which_tile == "XBIT":
+            flags = tile.bit_flags
+            tile_data = serialize_uint8(int(flags))
+        else:
+            print("Tile data parsing failed.")
+            tile_data = 0
+        output_bytes += tile_data
+    return output_bytes
+
+
+def serialize_building_data(city):
+    """
+    Serializes building data. Assumes buildings are well-formed, etc.
+    Args:
+        city (City): city to pull buildings from.
+    Returns:
+        Byte representation of the buildings.
+    """
+    groundcover = city.groundcover
+    networks = city.networks
+    tilelist = city.tilelist
+    output_bytes = ['b\x00' for x in range(city.city_size ** 2)]
+    # Start with groundcover and networks.
+    # Todo: make sure ordering on this works correctly.
+    for k, v in networks.items():
+        x, y = k
+        offset = x * 128 + y
+        data = serialize_uint8(v.building_id)
+        output_bytes[offset] = data
+    for k, v in groundcover.items():
+        x, y = k
+        offset = x * 128 + y
+        data = serialize_uint8(v.building_id)
+        output_bytes[offset] = data
+    # Why not pull from the city.buildings here?
+    # Because it doesn't store holes in buildings, but that are stores in the tilelist.
+    for k, v in tilelist.items():
+        x, y = k
+        offset = x * 128 + y
+        building = v.building
+        if building is not None:
+            data = serialize_uint8(building.building_id)
+            output_bytes[offset] = data
+    # t = b''.join(output_bytes)
+    return output_bytes
+

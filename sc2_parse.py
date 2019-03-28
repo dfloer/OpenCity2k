@@ -640,20 +640,20 @@ class City:
         Returns:
             Bytes representing a serialized .sc2 file to save.
         """
+        do_not_compress = ("CNAM", "ALTM", "PICT")
         uncompressed_segments = {}
         uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
-        #uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
-        test = sc2s.serialize_misc(self)
-        # uncompressed_segments["ALTM"] =
-        # uncompressed_segments["XTER"] =
-        # uncompressed_segments["XBLD"] =
-        # uncompressed_segments["XZON"] =
-        # uncompressed_segments["XUND"] =
-        # uncompressed_segments["XTXT"] =
+        uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
+        uncompressed_segments["ALTM"] = sc2s.serialize_tile_data(self, "ALTM")
+        uncompressed_segments["XTER"] = sc2s.serialize_tile_data(self, "XTER")
+        uncompressed_segments["XBLD"] = sc2s.serialize_building_data(self)
+        uncompressed_segments["XZON"] = sc2s.serialize_tile_data(self, "XZON")
+        uncompressed_segments["XUND"] = sc2s.serialize_tile_data(self, "XUND")
+        uncompressed_segments["XTXT"] = sc2s.serialize_tile_data(self, "XTXT")
         # uncompressed_segments["XLAB"] =
         # uncompressed_segments["XMIC"] =
         # uncompressed_segments["XTHG"] =
-        # uncompressed_segments["XBIT"] =
+        uncompressed_segments["XBIT"] = sc2s.serialize_tile_data(self, "XBIT")
         # uncompressed_segments["XTRF"] =
         # uncompressed_segments["XPLT"] =
         # uncompressed_segments["XVAL"] =
@@ -670,7 +670,10 @@ class City:
             # uncompressed_segments["PICT"] =
         compressed_segments = {}
         for segment_name, segment_data in uncompressed_segments.items():
-            compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
+            if segment_name not in do_not_compress:
+                compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
+            else:
+                compressed_segments[segment_name] = segment_data
         output_bytes = bytearray()
         for segment_name, segment_data in compressed_segments.items():
             segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
@@ -962,7 +965,7 @@ class Tile(City):
 
     def __str__(self):
         s = f"Tile at {self.coordinates}\n"
-        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
         s += f"Terrain: {terr}\n"
         # City stuff
