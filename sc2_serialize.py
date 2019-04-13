@@ -275,19 +275,17 @@ def serialize_building_data(city):
     groundcover = city.groundcover
     networks = city.networks
     tilelist = city.tilelist
-    output_bytes = ['b\x00' for x in range(city.city_size ** 2)]
+    output_bytes = bytearray(0x00 for _ in range(city.city_size ** 2))
     # Start with groundcover and networks.
     # Todo: make sure ordering on this works correctly.
     for k, v in networks.items():
         x, y = k
         offset = x * 128 + y
-        data = serialize_uint8(v.building_id)
-        output_bytes[offset] = data
+        output_bytes[offset] = v.building_id
     for k, v in groundcover.items():
         x, y = k
         offset = x * 128 + y
-        data = serialize_uint8(v.building_id)
-        output_bytes[offset] = data
+        output_bytes[offset] = v.building_id
     # Why not pull from the city.buildings here?
     # Because it doesn't store holes in buildings, but that are stores in the tilelist.
     for k, v in tilelist.items():
@@ -295,8 +293,6 @@ def serialize_building_data(city):
         offset = x * 128 + y
         building = v.building
         if building is not None:
-            data = serialize_uint8(building.building_id)
-            output_bytes[offset] = data
-    # t = b''.join(output_bytes)
+            output_bytes[offset] = building.building_id
     return output_bytes
 
