@@ -1,18 +1,17 @@
 # OpenCity2k
-The goal of this project is to have a free/open source re-implementation of SimCity 2000 as well as various bugfixes and enhancements including infinite cities, more graphical customization, more types of networks, more buildings, history tracking/replays, multiplayer support and more.
+The goal of this project is to have a free/open source re-implementation of SimCity 2000 that is faithful to the original as well as an enhanced version with various bugfixes and enhancements including: infinite cities, more graphical customization, more types of networks, more buildings, history tracking/replays, multiplayer support, rebalancing and more.
 
-Documentation of the various binary file formats and of the simulation behaviour can be found at [https://github.com/dfloer/SC2k-docs].
+Documentation of the various binary file formats and of the simulation behaviour can be found at <https://github.com/dfloer/SC2k-docs>.
 
 ## Project Structure
+Note that this is very preliminary and subject to change.
 ### Server
-This runs the simulation directly and handles updates to the client. Written in Python. This model was chosen to make future multiplayer support easier.
+This runs the simulation directly and handles updates to the client. Likely written in Python. This model was chosen to make future multiplayer support easier.
 ### Client
-Contains the game engine and code for communicating with the server. Likely written in something better suited for game development, though kivy(kivent) and Panda3D are engine options. 
+Contains the game engine and code for communicating with the server. Likely written in something better supported for game development, though kivy(kivent) and Panda3D are engine options. 
 
 ## Current Status
 Implementing basic functionality and parsing of game assets. Initial focus is around parsing .sc2 city files, .mif tilesets, .scn scenarios as well as all game assets, which will need to be sourced independently of this project as EA still claims copyright on them.
-
-Initial foc
 
 ## Requirements
  - pillow
@@ -64,3 +63,13 @@ Considered more-or-less complete in terms of game functionality, but there could
     - `-o/--output`: Path to the directory to save output in.
     - `-p/--palette`: Path to the file containing the palette to load.
     - `-a/--animate`: Create animated gifs of each sprite, using the game's colour cycling system for basic animations. Saved in the same output folder as specificed in `-o/--output`.
+    
+   ## Examples:
+   
+   There are some examples included what are mostly for my testing, but they should help explain how the libraries work at the least. They are located in Examples & Utilities and there is a [readme](https://github.com/dfloer/OpenCity2k/blob/master/Examples%20%26%20Utilities/README.md) there with more.
+   
+   ## Editor:
+   There is a very experimental start to an editor/game engine using Panda3D in the editor branch. It's nowhere near working anywhere past poorly rendering a city and panning it. A lot more work needs to go into it, and I might move on from it.
+   
+   ## License:
+   This project is using the AGPLv3, a copy of which is found in LICENSE.md
