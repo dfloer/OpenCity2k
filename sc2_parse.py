@@ -306,8 +306,12 @@ class City:
         Args:
             raw_sc2_data: Raw data for the city.
         """
-        # Todo: Check this:
-        left_corner = 0b1000
+        # If the city has been rotated, then what is considered the left corrner changes.
+        city_rotation = self.simulator_settings["Compass"]
+        corner = {0: 0b1000, 1: 0b0001, 2: 0b0010, 3: 0b0100}
+        left_corner = corner[city_rotation]
+        if self.debug:
+            print(f"City has rotation {city_rotation}.")
 
         groundcover_ids = list(range(0x01, 0x0D + 1))
         network_ids = list(range(0x0E, 0x79 + 1))
@@ -364,7 +368,7 @@ class City:
                             print(f"Found network: {building_id} at ({row}, {col})")
                     else:
                         if self.debug:
-                            print(f"Tile parsing fallthrough at ({building_x}, {building_y}) with id: {new_building_id}")
+                            print(f"Tile parsing fallthrough at ({row}, {col}) with id: {building_id}")
                         pass
 
 
@@ -381,8 +385,8 @@ class City:
         self.name_city(uncompressed_city)
         self.create_minimaps(uncompressed_city)
         self.create_tilelist(uncompressed_city)
-        self.find_buildings(uncompressed_city)
         self.parse_misc(uncompressed_city["MISC"])
+        self.find_buildings(uncompressed_city)
         self.parse_labels(uncompressed_city["XLAB"])
         self.parse_microsim(uncompressed_city["XMIC"])
         self.parse_things(uncompressed_city["XTHG"])
