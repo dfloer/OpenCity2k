@@ -126,6 +126,23 @@ class OpenCity2k(ShowBase):
             sprite = self.Sprite(f"{sprites_dir}{sprite_id}.png")
             self.sprites[sprite_id] = sprite
 
+    def draw_order_sorter(self, keys_to_sort):
+        render_order = []
+        output_order = []
+        city_size = self.city.city_size
+        # This is diagonal rendering.
+        for k in range(city_size * 2):
+            for j in range(k + 1):
+                i = k - j
+                if i < city_size and j < city_size:
+                    render_order += [(i, j)]
+        # There's probably a more efficient way to do this, but this is a quick test.
+        for n in render_order:
+            if n in keys_to_sort:
+                output_order += [n]
+        return output_order
+        
+
     def draw_terrain(self):
         # Todo: sloped need some pixel twiddling. Ugh
         sea_level = self.city.simulator_settings["GlobalSeaLevel"]
