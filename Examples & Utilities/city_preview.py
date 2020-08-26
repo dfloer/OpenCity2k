@@ -42,6 +42,7 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
     building_layer = {}
     if building_type != "none":
         building_layer = create_buildings(city, sprites)
+    things_layer = create_things_layer(city, sprites)
     terrain_layer_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     tilelist = city.tilelist
 
@@ -95,6 +96,11 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             building_image = building["image"]
             building_position = building["pixel"]
             terrain_layer_image.paste(building_image, building_position, building_image)
+        if k in things_layer.keys():
+            thing = things_layer[k]
+            thing_image = thing["image"]
+            thing_position = thing["pixel"]
+            terrain_layer_image.paste(thing_image, thing_position, thing_image)
     return terrain_layer_image
 
 
@@ -146,6 +152,9 @@ def create_buildings(city, sprites):
             extra = image.size[1] - 17
         shift = altitude * layer_offset
         if rotate:
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        # On two of the rotation settings, sprites are flipped.
+        if city.simulator_settings["Compass"] in (1, 3):
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
         i = (row * 16 - col * 16) + w_offset
         j = (row * 8 + col * 8) + h_offset + shift - extra
@@ -344,6 +353,168 @@ def get_traffic_image(tile, sprites):
     if rotate not in [1, 3] and building_id in [93, 94, 95, 96]:
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
     return tile_image
+
+def create_things_layer(city, sprites):
+    """
+    Generates the thing overlay layer. This includes trains, planes, helicopters, boats (sail and cargo), nessie, emergency deploys, the monster and tornadoes.
+    Note that emergency deploys do not show up in the game when loading, but are stored in the game file and this rendered here.
+    Args:
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+    Returns:
+        Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
+    """
+    thing_sprites = {}
+    for t in city.things.items():
+        thing_idx, thing_data = t
+        thing_id = thing_data.thing_id
+        thing_location = (thing_data.x, thing_data.y)
+
+        if thing_data.x > 127 or thing_data.y > 127:
+            continue
+
+        # txt = city.tilelist[thing_location].text_pointer
+        # print(f"{thing_idx}: {str(thing_data)}, txt: {txt}.")
+        tile_w_offset = 0
+        tile_h_offset = 0
+
+        if thing_id == 0:  # Appears to be null, so don't draw anything
+            continue
+        elif thing_id == 1:  # Airplane
+            # todo: add plane rotations
+            thing_image = sprites[1359]
+            tile_w_offset = -32  # Plane should be one tile to the left.
+            plane_alt = 6  # Todo: airplane has variable altitude, add that.
+            tile_h_offset = plane_alt * layer_offset
+        elif thing_id == 2:  # Helicopter
+            thing_image = sprites[1364]
+            copter_alt = 4  # Todo: helicopter has variable altitude, add that.
+            tile_h_offset = copter_alt * layer_offset
+        elif thing_id == 3:  # Ship
+            thing_image = sprites[1372]
+        elif thing_id == 4:  # Unknown
+            thing_image = sprites[1300]
+        elif thing_id == 5:  # Monster.
+            thing_image = draw_monster(sprites)
+            # Monster needs special handling because it's so big. This also isn't quite pixel perfect.
+            # Todo: monsters have a shadow, but only on the base terrain layer, so water or land, not on buildings.
+            tile_w_offset = -128
+            tile_h_offset = -int(5.5 * layer_offset)
+        elif thing_id == 6:  # Unknown
+            thing_image = sprites[1300]
+        elif thing_id == 7:  # police deploy
+            thing_image = sprites[1382]
+        elif thing_id == 8:  # fire deploy
+            thing_image = sprites[1383]
+        elif thing_id == 9:
+            if thing_data.rotation_1 == 0:
+                thing_image = sprites[1380]
+            # Nessie!
+            if thing_data.rotation_2 == 1:
+                thing_image = sprites[1379]
+            else:
+                thing_image = sprites[1381]
+        elif thing_id in (10, 11):
+            if thing_data.rotation_1 == 0:
+                thing_image = sprites[1374]
+            else:  # todo: handle diagonal rotations.
+                thing_image = sprites[1378]
+        elif thing_id == 14:  # military deploy
+            thing_image = sprites[1384]
+        elif thing_id == 15:  # tornado
+            thing_image = sprites[1499]
+            tile_w_offset = -32  # Move one tile to the left.
+        else:
+            thing_image = sprites[1303]
+        thing_sprites[thing_location] = thing_image
+        altitude = city.tilelist[thing_location].altitude
+        water_table_level = city.simulator_settings["GlobalSeaLevel"]
+        if altitude < water_table_level:
+            altitude = water_table_level
+        row, col = thing_location
+        extra = thing_image.size[1] - 17
+        shift = altitude * layer_offset
+        i = (row * 16 - col * 16) + w_offset + tile_w_offset
+        j = (row * 8 + col * 8) + h_offset + shift - extra + tile_h_offset
+
+        thing_sprites[(row, col)] = {"pixel": (i, j), "image": thing_image}
+    return thing_sprites
+
+
+def draw_monster(sprites):
+    """
+    Draws the monster. Future feature would be to draw a random monster.
+    Draw order is the two rear legs, then body, then front legs.
+    Each of the two legs has two positions it can be in, and each leg can be independent from the others.
+
+    This is some ugly special case rendering. I didn't spot what the trick was, so...
+    This is also not pixel perfect with the game.
+    Returns:
+        An image containing the monster.
+    """
+    rear_upper = [1478, 1479]
+    rear_lower = [1480, 1481]
+    rear_claw = [1482, 1483]
+    front_upper = [1484, 1485]
+    front_lower = [1486, 1487]
+    front_claw = [1488, 1489]
+    head = [1490, 1491]
+
+    image = Image.new('RGBA', (300, 300), (255, 255, 255, 0))
+
+    # left rear leg
+    left_rear_image = Image.new('RGBA', (87, 145), (255, 255, 255, 0))
+    img = sprites[rear_claw[0]]
+    left_rear_image.paste(img, (3, 95), img)
+    img = sprites[rear_lower[0]]
+    left_rear_image.paste(img, (26, 53), img)
+    img = sprites[rear_upper[1]]
+    left_rear_image.paste(img, (26, 0), img)
+
+    # right rear leg
+    right_rear_image = Image.new('RGBA', (87, 145), (255, 255, 255, 0))
+    img = sprites[rear_claw[1]]
+    right_rear_image.paste(img, (25, 38), img)
+    img = sprites[rear_lower[1]]
+    right_rear_image.paste(img, (10, 6), img)
+    img = sprites[rear_upper[0]]
+    right_rear_image.paste(img, (26, 0), img)
+    right_rear_image = right_rear_image.transpose(Image.FLIP_LEFT_RIGHT)
+
+    # left front leg
+    left_front_image = Image.new('RGBA', (87, 145), (255, 255, 255, 0))
+    img = sprites[front_claw[0]]
+    left_front_image.paste(img, (9, 82), img)
+    img = sprites[front_lower[0]]
+    left_front_image.paste(img, (29, 32), img)
+    img = sprites[front_upper[1]]
+    left_front_image.paste(img, (23, 0), img)
+
+    # right frontrear leg
+    right_front_image = Image.new('RGBA', (87, 145), (255, 255, 255, 0))
+    img = sprites[front_claw[1]]
+    right_front_image.paste(img, (28, 51), img)
+    img = sprites[front_lower[1]]
+    right_front_image.paste(img, (9, 6), img)
+    img = sprites[front_upper[0]]
+    right_front_image.paste(img, (23, 0), img)
+    right_front_image = right_front_image.transpose(Image.FLIP_LEFT_RIGHT)
+
+    # head
+    head_left = sprites[head[1]]
+    head_right = sprites[head[1]]
+    head_right = head_right.transpose(Image.FLIP_LEFT_RIGHT)
+
+    image.paste(left_rear_image, (43, 38), left_rear_image)
+    image.paste(right_rear_image, (169, 38), right_rear_image)
+
+    image.paste(head_left, (86, 0), head_left)
+    image.paste(head_right, (148, 0), head_right)
+
+    image.paste(left_front_image, (43, 61), left_front_image)
+    image.paste(right_front_image, (168, 61), right_front_image)
+
+    return image
 
 
 def draw_edge(city, sprites, position):
