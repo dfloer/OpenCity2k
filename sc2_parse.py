@@ -136,7 +136,7 @@ class City:
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altidue_tunnel = int(altm_bits[0 : 7], 2)
+                tile.altitude_tunnel = int(altm_bits[0 : 7], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -775,7 +775,7 @@ class Tile(City):
     def __init__(self, traffic, pollution, value, crime, police, fire, density, growth, label):
         self.coordinates = (0, 0)
         # Altitude map related values.
-        self.altidue_tunnel = 0
+        self.altitude_tunnel = 0
         self.is_water = 0
         self.altitude_unknown = 0
         self.altitude = 0
@@ -875,7 +875,7 @@ class Tile(City):
 
     def __str__(self):
         s = f"Tile at {self.coordinates}\n"
-        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.altitude_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s += f"Altitude:\n\ttunnel: {self.altitude_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
         s += f"Terrain: {terr}\n"
         # City stuff
