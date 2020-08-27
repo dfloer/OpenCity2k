@@ -19,9 +19,26 @@ This folder contains some examples and utilities that do useful things and also 
 
     Command line arguments:
    - `-i`/`--input`: input .sc2 to open and generate the minimaps on.
-   - `-o`/`--output`: Directory to create the minimaps in.
+   - `-o`/`--output`: Directory to create the minimaps in. Will overwrite any existing ones.
    - `-p`/`--palette`: Full path to the `PAL_MSTR.BMP` file to use for the palette.
 
-Currently generated minimaps:
+   Currently generated minimaps:
    - Structures: Only shows where structures are, base minimap in game.
    - Zones: shows zones.
+   - Highlighted buildings:
+     - Police stations
+     - Fire stations
+     - Colleges
+     - Schools
+   - Road network
+   - Rail network
+   - Subway network
+   - Pipe network and water supply
+   - Power network and power supply
+   - Growth Rate
+   - Crime
+   - Fire Power
+   - Police Power
+   - Pollution
+   - Traffic
+   - Land Value
