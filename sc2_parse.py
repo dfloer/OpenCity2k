@@ -132,13 +132,13 @@ class City:
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.is_water = bool(int(altm_bits[7 : 8], 2))
-                tile.altitude_unknown = int(altm_bits[8 : 10], 2)
+                tile.is_water = bool(int(altm_bits[8 : 9], 2))
+                tile.altitude_unknown = int(altm_bits[9 : 11], 2)
                 tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altitude_tunnel = int(altm_bits[0 : 7], 2)
+                tile.altitude_tunnel = int(altm_bits[0 : 8], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -654,19 +654,19 @@ class City:
         uncompressed_segments["XZON"] = sc2s.serialize_tile_data(self, "XZON")
         uncompressed_segments["XUND"] = sc2s.serialize_tile_data(self, "XUND")
         uncompressed_segments["XTXT"] = sc2s.serialize_tile_data(self, "XTXT")
-        # uncompressed_segments["XLAB"] =
-        # uncompressed_segments["XMIC"] =
-        # uncompressed_segments["XTHG"] =
+        uncompressed_segments["XLAB"] = sc2s.serialize_labels(self)
+        uncompressed_segments["XMIC"] = sc2s.serialize_microsim(self)
+        uncompressed_segments["XTHG"] = sc2s.serialize_things(self)
         uncompressed_segments["XBIT"] = sc2s.serialize_tile_data(self, "XBIT")
-        # uncompressed_segments["XTRF"] =
-        # uncompressed_segments["XPLT"] =
-        # uncompressed_segments["XVAL"] =
-        # uncompressed_segments["XCRM"] =
-        # uncompressed_segments["XPLC"] =
-        # uncompressed_segments["XFIR"] =
-        # uncompressed_segments["XPOP"] =
-        # uncompressed_segments["XROG"] =
-        # uncompressed_segments["XGRP"] =
+        uncompressed_segments["XTRF"] = sc2s.serialize_minimap(self, "traffic")
+        uncompressed_segments["XPLT"] = sc2s.serialize_minimap(self, "pollution")
+        uncompressed_segments["XVAL"] = sc2s.serialize_minimap(self, "value")
+        uncompressed_segments["XCRM"] = sc2s.serialize_minimap(self, "crime")
+        uncompressed_segments["XPLC"] = sc2s.serialize_minimap(self, "police")
+        uncompressed_segments["XFIR"] = sc2s.serialize_minimap(self, "fire")
+        uncompressed_segments["XPOP"] = sc2s.serialize_minimap(self, "density")
+        uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
+        uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
         if self.is_scenario:
             pass
             # uncompressed_segments["TEXT"] =
@@ -679,9 +679,15 @@ class City:
             else:
                 compressed_segments[segment_name] = segment_data
         output_bytes = bytearray()
+        output_bytes += bytearray(bytes("FORM", 'ascii'))
+        # This is a placeholder, we need to fill it in later.
+        output_bytes += bytearray(bytes("SIZE", 'ascii'))
+        output_bytes += bytearray(bytes("SCDH", 'ascii'))
         for segment_name, segment_data in compressed_segments.items():
             segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
             output_bytes += bytearray(segment_header + segment_data)
+        total_bytes = len(output_bytes) - 8  # FORM and length don't count.
+        output_bytes[4 : 8] = sc2s.serialize_int32(total_bytes)
         return output_bytes
 
     def save_city(self, path):
@@ -1014,7 +1020,22 @@ class Thing:
         self.rotation_2 = raw_thing[2]
         self.x = raw_thing[3]
         self.y = raw_thing[4]
-        self.data = [raw_thing[x] for x in range(4, 12)]
+        self.data = [raw_thing[x] for x in range(4, 11)]
+
+    def serialize_thing(self):
+        """
+        Transforms this thing back to its byte representation.
+        Returns:
+            raw_thing (bytes):  12 bytes representing the thing.
+        """
+        thing_bytes = bytearray()
+        thing_bytes += sc2s.serialize_uint8(int(self.thing_id))
+        thing_bytes += sc2s.serialize_uint8(int(self.rotation_1))
+        thing_bytes += sc2s.serialize_uint8(int(self.rotation_2))
+        thing_bytes += sc2s.serialize_uint8(int(self.x))
+        thing_bytes += sc2s.serialize_uint8(int(self.y))
+        thing_bytes += bytearray(bytes(self.data))
+        return thing_bytes
 
     def __str__(self):
         return f"Thing with ID: { self.thing_id} at ({self.x}, {self.y}), rotations: {self.rotation_1}, {self.rotation_2}, data: {self.data}"
@@ -1035,6 +1056,16 @@ class Graph:
         self.ten_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
         start += 20 * 4
         self.hundred_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
+
+    def serialize_graph(self):
+        graph_bytes = bytearray()
+        for x in self.one_year:
+            graph_bytes += sc2s.serialize_uint32(x)
+        for x in self.ten_years:
+            graph_bytes += sc2s.serialize_uint32(x)
+        for x in self.hundred_years:
+            graph_bytes += sc2s.serialize_uint32(x)
+        return graph_bytes
 
     def __str__(self):
         s = f"Year:\n\t{[x for x in self.one_year]}.\n"

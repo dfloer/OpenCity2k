@@ -240,7 +240,7 @@ def serialize_tile_data(city, which_tile):
     for tile in tilelist.values():
         if which_tile == "ALTM":
             bit_string = ''
-            bit_string += int_to_n_bits(tile.altidue_tunnel, 8)
+            bit_string += int_to_n_bits(tile.altitude_tunnel, 8)
             bit_string += int_to_n_bits(tile.is_water, 1)
             bit_string += int_to_n_bits(tile.altitude_unknown, 2)
             bit_string += int_to_n_bits(tile.altitude, 5)
@@ -251,7 +251,8 @@ def serialize_tile_data(city, which_tile):
         elif which_tile == "XTER":
             tile_data = serialize_uint8(tile.terrain)
         elif which_tile == "XZON":
-            tile_data = serialize_uint8(tile.zone)
+            zone_data = int(f"{tile.zone_corners}{int_to_n_bits(tile.zone, 4)}", 2)
+            tile_data = serialize_uint8(zone_data)
         elif which_tile == "XTXT":
             tile_data = serialize_uint8(tile.text_pointer)
         elif which_tile == "XBIT":
@@ -296,3 +297,72 @@ def serialize_building_data(city):
             output_bytes[offset] = building.building_id
     return output_bytes
 
+
+def serialize_labels(city):
+    """
+    Serialized label (XLAB) entries.
+    Args:
+        city (City): city to pull labels from.
+    Returns:
+        Byte representation of the labels.
+    """
+    label_bytes = bytearray(bytes(6400))
+    for idx, label_text in enumerate(city.labels.values()):
+        bl = bytearray(bytes(label_text, 'ascii'))
+        label_bytes[idx * 25 : idx * 25 + len(bl)] = bl
+    return label_bytes
+
+
+def serialize_microsim(city):
+    """
+    Serialized microsim (XMIC) entries.
+    Args:
+        city (City): city to pull microsims from.
+    Returns:
+        Byte representation of the microsims.
+    """
+    microsim_bytes = bytearray()
+    for data in city.microsim_state.values():
+        microsim_bytes += data
+    return microsim_bytes
+
+def serialize_things(city):
+    """
+    Serialized things/vehicles (XTHG) entries.
+    Args:
+        city (City): city to pull things from.
+    Returns:
+        Byte representation of the things.
+    """
+    things_bytes = bytearray()
+    for t in city.things.values():
+        things_bytes += t.serialize_thing()
+    return things_bytes
+
+def serialize_minimap(city, minimap):
+    """
+    Serialize minimap to bytes.
+    Args:
+        city (City): city to pull things from.
+        minimap (str): which minimap?
+    Returns:
+        Byte representation of the minimap..
+    """
+    minimap_bytes = bytearray()
+    minimap_data = getattr(city, minimap).data
+    for x in minimap_data.values():
+        minimap_bytes += serialize_uint8(x)
+    return minimap_bytes
+
+def serialize_graphs(city):
+    """
+    Serialized all 16 graphs.
+    Args:
+        city (City): city to pull things from.
+    Returns:
+        Byte representation of the graphs.
+    """
+    graph_bytes = bytearray()
+    for g in city.graphs.values():
+        graph_bytes += g.serialize_graph()
+    return graph_bytes
