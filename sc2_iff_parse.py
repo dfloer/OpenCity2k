@@ -118,7 +118,7 @@ def mac_fix(input_data):
         Bytes comprising a compatible SC2k Win95 city file from the Mac file.
     """
     reported_size = parse_int32(input_data[0x84 : 0x88]) + 8
-    return input[0x80 : 0x80 + reported_size]
+    return input_data[0x80 : 0x80 + reported_size]
 
 
 # Functions to handle chunking up the IFF file.
