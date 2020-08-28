@@ -2,6 +2,7 @@ from PIL import Image
 import argparse
 import sys
 from os import path
+import random
 
 sys.path.append('..')
 import sc2_parse as sc2p
@@ -43,6 +44,7 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
     if building_type != "none":
         building_layer = create_buildings(city, sprites)
     things_layer = create_things_layer(city, sprites)
+    disaster_layer = create_disaster_layer(city, sprites)
     terrain_layer_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     tilelist = city.tilelist
 
@@ -96,6 +98,11 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             building_image = building["image"]
             building_position = building["pixel"]
             terrain_layer_image.paste(building_image, building_position, building_image)
+        if k in disaster_layer.keys():
+            disaster = disaster_layer[k]
+            disaster_image = disaster["image"]
+            disaster_position = disaster["pixel"]
+            terrain_layer_image.paste(disaster_image, disaster_position, disaster_image)
         if k in things_layer.keys():
             thing = things_layer[k]
             thing_image = thing["image"]
@@ -515,6 +522,43 @@ def draw_monster(sprites):
     image.paste(right_front_image, (168, 61), right_front_image)
 
     return image
+
+
+def create_disaster_layer(city, sprites):
+    """
+    Draws the disaster overlay, this ix the toxic cloud, flood, rioters and fires.
+    Does not include monster or tornado, as those are part of XTHG and are entities, not properties of tiles.
+    Args:
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+    Returns:
+        Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
+    """
+    random.seed(42)  # Fire (and possibly other disaster tiles) should be deterministically randomly chosen.
+    disaster_sprites = {}
+    sprite_map = {0xFB: 1496, 0xFC: 1492, 0xFD: 1493, 0xFE: 1494}
+    fire_ids = [1396, 1397, 1398, 1399]
+    for tile_location, tile in city.tilelist.items():
+        txt = tile.text_pointer
+        if txt == 0xFF:
+            disaster_image = sprites[fire_ids[random.randint(0, 3)]]
+        elif txt in sprite_map.keys():
+            disaster_image = sprites[sprite_map[txt]]
+        else:
+            continue
+        disaster_sprites[tile_location] = disaster_image
+        altitude = tile.altitude
+        water_table_level = city.simulator_settings["GlobalSeaLevel"]
+        if altitude < water_table_level:
+            altitude = water_table_level
+        row, col = tile_location
+        extra = disaster_image.size[1] - 17
+        shift = altitude * layer_offset
+        i = (row * 16 - col * 16) + w_offset
+        j = (row * 8 + col * 8) + h_offset + shift - extra
+
+        disaster_sprites[(row, col)] = {"pixel": (i, j), "image": disaster_image}
+    return disaster_sprites
 
 
 def draw_edge(city, sprites, position):
