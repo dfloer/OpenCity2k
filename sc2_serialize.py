@@ -309,7 +309,10 @@ def serialize_labels(city):
     label_bytes = bytearray(bytes(6400))
     for idx, label_text in enumerate(city.labels.values()):
         bl = bytearray(bytes(label_text, 'ascii'))
-        label_bytes[idx * 25 : idx * 25 + len(bl)] = bl
+        # Length of the following label.
+        label_bytes[idx * 25 : idx * 25 + 1] = serialize_uint8(len(bl))
+        # Actual label
+        label_bytes[idx * 25 + 1 : idx * 25 + len(bl) + 1] = bl
     return label_bytes
 
 
