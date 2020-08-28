@@ -138,7 +138,7 @@ class City:
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altidue_tunnel = int(altm_bits[0 : 7], 2)
+                tile.altitude_tunnel = int(altm_bits[0 : 7], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -308,8 +308,12 @@ class City:
         Args:
             raw_sc2_data: Raw data for the city.
         """
-        # Todo: Check this:
-        left_corner = 0b1000
+        # If the city has been rotated, then what is considered the left corrner changes.
+        city_rotation = self.simulator_settings["Compass"]
+        corner = {0: 0b1000, 1: 0b0001, 2: 0b0010, 3: 0b0100}
+        left_corner = corner[city_rotation]
+        if self.debug:
+            print(f"City has rotation {city_rotation}.")
 
         groundcover_ids = list(range(0x01, 0x0D + 1))
         network_ids = list(range(0x0E, 0x79 + 1))
@@ -366,7 +370,7 @@ class City:
                             print(f"Found network: {building_id} at ({row}, {col})")
                     else:
                         if self.debug:
-                            print(f"Tile parsing fallthrough at ({building_x}, {building_y}) with id: {new_building_id}")
+                            print(f"Tile parsing fallthrough at ({row}, {col}) with id: {building_id}")
                         pass
 
 
@@ -383,8 +387,8 @@ class City:
         self.name_city(uncompressed_city)
         self.create_minimaps(uncompressed_city)
         self.create_tilelist(uncompressed_city)
-        self.find_buildings(uncompressed_city)
         self.parse_misc(uncompressed_city["MISC"])
+        self.find_buildings(uncompressed_city)
         self.parse_labels(uncompressed_city["XLAB"])
         self.parse_microsim(uncompressed_city["XMIC"])
         self.parse_things(uncompressed_city["XTHG"])
@@ -865,7 +869,7 @@ class Tile(City):
     def __init__(self, traffic, pollution, value, crime, police, fire, density, growth, label):
         self.coordinates = (0, 0)
         # Altitude map related values.
-        self.altidue_tunnel = 0
+        self.altitude_tunnel = 0
         self.is_water = 0
         self.altitude_unknown = 0
         self.altitude = 0
@@ -965,7 +969,7 @@ class Tile(City):
 
     def __str__(self):
         s = f"Tile at {self.coordinates}\n"
-        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s += f"Altitude:\n\ttunnel: {self.altitude_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
         s += f"Terrain: {terr}\n"
         # City stuff
