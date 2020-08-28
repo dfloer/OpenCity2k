@@ -309,10 +309,16 @@ def create_network_layer(city, sprites):
             traffic_image = get_traffic_image(tile, sprites)
             if traffic_image:
                 traffic_image_offset = image.size[1] - traffic_image.size[1]
-                # Note that this simple paste doesn't quite work like the game does.
-                # It only composits the traffic if the pixel it's compositing to is the grey road colour.
-                # This is so that it doesn't draw traffic on top of power lines, railroad tracks and crosswalks.
-                image.paste(traffic_image, (0, traffic_image_offset), traffic_image)
+                # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
+                # There's probably a better way of doing this, but it works for now.
+                mask = Image.new('RGBA', (traffic_image.size), (0, 0, 0, 0))
+                w, h = traffic_image.size
+                for x in range(w):
+                    for y in range(h):
+                        p = traffic_image.getpixel((x, y))
+                        if p != (140, 140, 140, 255):
+                            mask.putpixel((x, y), p)
+                image.paste(traffic_image, (0, traffic_image_offset), mask)
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
 
