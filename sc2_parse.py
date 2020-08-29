@@ -773,31 +773,32 @@ class Budget:
         "unknown": 0,
         "jan_count": 0,
         "jan_funding": 0,
-        'feb_funding': 0,
         'feb_count': 0,
-        'mar_funding': 0,
+        'feb_funding': 0,
         'mar_count': 0,
-        'apr_funding': 0,
+        'mar_funding': 0,
         'apr_count': 0,
-        'may_funding': 0,
+        'apr_funding': 0,
         'may_count': 0,
-        'jun_funding': 0,
+        'may_funding': 0,
         'jun_count': 0,
-        'jul_funding': 0,
+        'jun_funding': 0,
         'jul_count': 0,
-        'aug_funding': 0,
+        'jul_funding': 0,
         'aug_count': 0,
-        'sep_funding': 0,
+        'aug_funding': 0,
         'sep_count': 0,
-        'oct_funding': 0,
+        'sep_funding': 0,
         'oct_count': 0,
-        'nov_funding': 0,
+        'oct_funding': 0,
         'nov_count': 0,
-        'dec_funding': 0,
+        'nov_funding': 0,
         'dec_count': 0,
+        'dec_funding': 0,
     }
-    _sub_budget_indices = {'Residential': 0x077C, 'Commercial': 0x07E8, 'Industrial': 0x0854,
-                           'Bonds': 0x0930, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
+    # Ordinances isn't really handled properly yet here, but it's here for now.
+    _sub_budget_indices = {'Residential': 0x077C, 'Commercial': 0x07E8, 'Industrial': 0x0854, 'Ordinances': 0x08C0,
+                           'Bonds': 0x092C, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
                            'Schools': 0x0ADC, 'Colleges': 0x0B48,
                            'Road': 0x0BB4, 'Hiway': 0x0C20, 'Bridge': 0x0C8C, 'Rail': 0x0CF8, 'Subway': 0x0D64,
                            'Tunnel': 0x0DD0}
@@ -852,7 +853,7 @@ class Budget:
         """
         data = bytearray()
         for bond in self.bonds:
-            data += bytearray(serialize_uint32(bond))
+            data += bytearray(serialize_int32(bond))
         return data
 
     def serialize_ordinances(self):
