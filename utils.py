@@ -64,6 +64,17 @@ def parse_int32(unparsed_bytes):
     return unpack('>i', unparsed_bytes)[0]
 
 
+def serialize_int32(integer):
+    """
+    Serialized an integer into a 4-bytes int32.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation
+    """
+    return pack('>i', integer)
+
+
 def parse_uint32(unparsed_bytes):
     """
     Parses 4 bytes into a big endian unsigned integer.
@@ -73,6 +84,17 @@ def parse_uint32(unparsed_bytes):
         Integer representation.
     """
     return unpack('>I', unparsed_bytes)[0]
+
+
+def serialize_uint32(integer):
+    """
+    Serialized an integer into a 4-bytes unsigned int32.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation
+    """
+    return pack('>I', integer)
 
 
 def parse_uint16(unparsed_bytes):
@@ -86,6 +108,17 @@ def parse_uint16(unparsed_bytes):
     return unpack('>H', unparsed_bytes)[0]
 
 
+def serialize_uint16(integer):
+    """
+    PSerialized an integer into a 2-byte unsigned int.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation.
+    """
+    return pack('>H', integer)
+
+
 def parse_uint8(unparsed_bytes):
     """
     Parses 1 byte into a big endian signed integer.
@@ -95,6 +128,17 @@ def parse_uint8(unparsed_bytes):
         Integer representation.
     """
     return unpack('>B', unparsed_bytes)[0]
+
+
+def serialize_uint8(integer):
+    """
+    PSerialized an integer into a 2-byte unsigned int.
+    Args:
+        integer (int): Integer to turn into bytes.
+    Returns:
+        Byte representation.
+    """
+    return pack('>B', integer)
 
 
 def int_to_bitstring(int_input, pad=0):
@@ -190,3 +234,16 @@ def trim_cstring(input_bytes):
             break
         clean_string += chr(char)
     return clean_string
+
+
+def int_to_n_bits(integer, num_bits):
+    """
+    Converts an int to a a bitstring of a specific number of bits.
+    If it's larger, it'll get truncated.
+    Args:
+        integer (int): number to convert.
+        num_bits (int): number of bits to maye the output string.
+    Returns:
+        A binary string representation of the integer.
+    """
+    return f"{integer:0{num_bits}b}"

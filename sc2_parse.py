@@ -1,6 +1,8 @@
 import sc2_iff_parse as sc2p
+import sc2_serialize as sc2s
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
+from utils import serialize_int32, serialize_uint32
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
@@ -130,13 +132,13 @@ class City:
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.is_water = bool(int(altm_bits[7 : 8], 2))
-                tile.altitude_unknown = int(altm_bits[8 : 10], 2)
+                tile.is_water = bool(int(altm_bits[8 : 9], 2))
+                tile.altitude_unknown = int(altm_bits[9 : 11], 2)
                 tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altitude_tunnel = int(altm_bits[0 : 7], 2)
+                tile.altitude_tunnel = int(altm_bits[0 : 8], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -549,7 +551,7 @@ class City:
             '0x104c': 'SewerBonus',
             '0x1050': 'Extra', }
         handle_special = ['Population Graphs', 'Industry Graphs', 'Tile Counts', 'Bonds', 'Neighbours', 'Budget',
-                          'Military Count', 'Paper List', 'News List', 'Extra'] + list(
+                          'Military Count', 'Paper List', 'News List', 'Extra', 'Ordinances'] + list(
             self.simulator_settings.keys()) + list(self.game_settings.keys()) + list(self.inventions.keys())
 
         # Make sure the dict is sorted because following code requires the sorting.
@@ -570,7 +572,7 @@ class City:
                 for x in range(0, 256):
                     self.building_count[x] = parse_int32(misc_data[offset: offset + 4])
                     offset += 4
-            elif v == 'Bonds':
+            elif v in ('Bonds', 'Ordinances'):
                 # Handled along with the budget.
                 continue
             elif v == 'Neighbours':
@@ -581,7 +583,7 @@ class City:
                     neighbour = collections.OrderedDict()
                     for x in range(start_offset, start_offset + 16, 4):
                         type_key = neighbour_types[((x + 8) % 16) // 4]
-                        neighbour[type_key] = misc_data
+                        neighbour[type_key] = parse_int32(misc_data[x : x + 4])
                     self.neighbor_info[idx] = neighbour
             elif v == 'Budget':
                 self.budget = Budget()
@@ -626,13 +628,78 @@ class City:
             A dictionary with the key being .
         """
         num_keys = len(keys)
-        values = [[] for x in range(num_keys)]
+        values = [[] for _ in range(num_keys)]
         for idx, val in enumerate(range(offset, offset + length, 4)):
-            values[idx % num_keys].extend(misc_data)
+            data = parse_int32(misc_data[offset : offset + 4])
+            values[idx % num_keys].extend([data])
+            offset += 4
         output = {}
         for idx, key_name in enumerate(keys):
             output[key_name] = values[idx]
         return output
+
+    def serialize(self):
+        """
+        Creates the bytes representing a .sc2 file to save.
+        Returns:
+            Bytes representing a serialized .sc2 file to save.
+        """
+        do_not_compress = ("CNAM", "ALTM", "PICT")
+        uncompressed_segments = {}
+        uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
+        uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
+        uncompressed_segments["ALTM"] = sc2s.serialize_tile_data(self, "ALTM")
+        uncompressed_segments["XTER"] = sc2s.serialize_tile_data(self, "XTER")
+        uncompressed_segments["XBLD"] = sc2s.serialize_building_data(self)
+        uncompressed_segments["XZON"] = sc2s.serialize_tile_data(self, "XZON")
+        uncompressed_segments["XUND"] = sc2s.serialize_tile_data(self, "XUND")
+        uncompressed_segments["XTXT"] = sc2s.serialize_tile_data(self, "XTXT")
+        uncompressed_segments["XLAB"] = sc2s.serialize_labels(self)
+        uncompressed_segments["XMIC"] = sc2s.serialize_microsim(self)
+        uncompressed_segments["XTHG"] = sc2s.serialize_things(self)
+        uncompressed_segments["XBIT"] = sc2s.serialize_tile_data(self, "XBIT")
+        uncompressed_segments["XTRF"] = sc2s.serialize_minimap(self, "traffic")
+        uncompressed_segments["XPLT"] = sc2s.serialize_minimap(self, "pollution")
+        uncompressed_segments["XVAL"] = sc2s.serialize_minimap(self, "value")
+        uncompressed_segments["XCRM"] = sc2s.serialize_minimap(self, "crime")
+        uncompressed_segments["XPLC"] = sc2s.serialize_minimap(self, "police")
+        uncompressed_segments["XFIR"] = sc2s.serialize_minimap(self, "fire")
+        uncompressed_segments["XPOP"] = sc2s.serialize_minimap(self, "density")
+        uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
+        uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
+        if self.is_scenario:
+            pass
+            # uncompressed_segments["TEXT"] =
+            # uncompressed_segments["SCEN"] =
+            # uncompressed_segments["PICT"] =
+        compressed_segments = {}
+        for segment_name, segment_data in uncompressed_segments.items():
+            if segment_name not in do_not_compress:
+                compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
+            else:
+                compressed_segments[segment_name] = segment_data
+        output_bytes = bytearray()
+        output_bytes += bytearray(bytes("FORM", 'ascii'))
+        # This is a placeholder, we need to fill it in later.
+        output_bytes += bytearray(bytes("SIZE", 'ascii'))
+        output_bytes += bytearray(bytes("SCDH", 'ascii'))
+        for segment_name, segment_data in compressed_segments.items():
+            segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
+            output_bytes += bytearray(segment_header + segment_data)
+        total_bytes = len(output_bytes) - 8  # FORM and length don't count.
+        output_bytes[4 : 8] = sc2s.serialize_int32(total_bytes)
+        return output_bytes
+
+    def save_city(self, path):
+        """
+        Save this city to a given path.
+        Args:
+            path (str): path to save the city to.
+        Returns:
+            Nothing, but saves the city at the given path.
+        """
+        with open(path, 'wb') as f:
+            f.write(self.serialize())
 
 
 class Building:
@@ -706,31 +773,32 @@ class Budget:
         "unknown": 0,
         "jan_count": 0,
         "jan_funding": 0,
-        'feb_funding': 0,
         'feb_count': 0,
-        'mar_funding': 0,
+        'feb_funding': 0,
         'mar_count': 0,
-        'apr_funding': 0,
+        'mar_funding': 0,
         'apr_count': 0,
-        'may_funding': 0,
+        'apr_funding': 0,
         'may_count': 0,
-        'jun_funding': 0,
+        'may_funding': 0,
         'jun_count': 0,
-        'jul_funding': 0,
+        'jun_funding': 0,
         'jul_count': 0,
-        'aug_funding': 0,
+        'jul_funding': 0,
         'aug_count': 0,
-        'sep_funding': 0,
+        'aug_funding': 0,
         'sep_count': 0,
-        'oct_funding': 0,
+        'sep_funding': 0,
         'oct_count': 0,
-        'nov_funding': 0,
+        'oct_funding': 0,
         'nov_count': 0,
-        'dec_funding': 0,
+        'nov_funding': 0,
         'dec_count': 0,
+        'dec_funding': 0,
     }
-    _sub_budget_indices = {'Residential': 0x077C, 'Commercial': 0x07E8, 'Industrial': 0x0854,
-                           'Bonds': 0x0930, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
+    # Ordinances isn't really handled properly yet here, but it's here for now.
+    _sub_budget_indices = {'Residential': 0x077C, 'Commercial': 0x07E8, 'Industrial': 0x0854, 'Ordinances': 0x08C0,
+                           'Bonds': 0x092C, 'Police': 0x0998, 'Fire': 0x0A04, 'Health': 0x0A70,
                            'Schools': 0x0ADC, 'Colleges': 0x0B48,
                            'Road': 0x0BB4, 'Hiway': 0x0C20, 'Bridge': 0x0C8C, 'Rail': 0x0CF8, 'Subway': 0x0D64,
                            'Tunnel': 0x0DD0}
@@ -748,7 +816,7 @@ class Budget:
         """
         # Ordinances
         ordinance_raw = raw_misc_data[0x0FA0 : 0x0FA0 + 4]
-        self.ordinance_flags = int_to_bitstring(parse_uint32(ordinance_raw))
+        self.ordinance_flags = [int(x) for x in int_to_bitstring(parse_uint32(ordinance_raw))]
 
         # bonds
         start_offset = 0x0610
@@ -765,7 +833,40 @@ class Budget:
                 sub_budget[k] = chunk_data[idx]
             self.budget_items[name] = sub_budget
 
+    def serialize_budget(self):
+        """
+        Serializes the budget into bytes.
+        Returns:
+            Bytearray representing the budget for saving to a .sc2 file.
+        """
+        output = bytearray()
+        for sub_budget in self.budget_items.values():
+            for e in sub_budget.values():
+                output += bytearray(serialize_int32(e))
+        return output
 
+    def serialize_bonds(self):
+        """
+        Serializes the 50 bonds into bytes.
+        Returns:
+            50 x 4B ints representing all of the bonds.
+        """
+        data = bytearray()
+        for bond in self.bonds:
+            data += bytearray(serialize_int32(bond))
+        return data
+
+    def serialize_ordinances(self):
+        """
+        Convert the ordinance flags to their 4-byte integer representation.
+        Returns:
+            Byte representation of the ordinance flags.
+        """
+        # Bitshifting to convert the list of 0/1s to an int.
+        bits = 0
+        for bit in self.ordinance_flags:
+            bits = (bits << 1) | bit
+        return serialize_int32(bits)
 
 
 class Tile(City):
@@ -920,7 +1021,22 @@ class Thing:
         self.rotation_2 = raw_thing[2]
         self.x = raw_thing[3]
         self.y = raw_thing[4]
-        self.data = [raw_thing[x] for x in range(4, 12)]
+        self.data = [raw_thing[x] for x in range(5, 12)]
+
+    def serialize_thing(self):
+        """
+        Transforms this thing back to its byte representation.
+        Returns:
+            raw_thing (bytes):  12 bytes representing the thing.
+        """
+        thing_bytes = bytearray()
+        thing_bytes += sc2s.serialize_uint8(int(self.thing_id))
+        thing_bytes += sc2s.serialize_uint8(int(self.rotation_1))
+        thing_bytes += sc2s.serialize_uint8(int(self.rotation_2))
+        thing_bytes += sc2s.serialize_uint8(int(self.x))
+        thing_bytes += sc2s.serialize_uint8(int(self.y))
+        thing_bytes += bytearray(bytes(self.data))
+        return thing_bytes
 
     def __str__(self):
         return f"Thing with ID: { self.thing_id} at ({self.x}, {self.y}), rotations: {self.rotation_1}, {self.rotation_2}, data: {self.data}"
@@ -941,6 +1057,16 @@ class Graph:
         self.ten_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
         start += 20 * 4
         self.hundred_years = [parse_int32(raw_graphs[x : x + 4]) for x in range(start, start + 20 * 4, 4)]
+
+    def serialize_graph(self):
+        graph_bytes = bytearray()
+        for x in self.one_year:
+            graph_bytes += sc2s.serialize_uint32(x)
+        for x in self.ten_years:
+            graph_bytes += sc2s.serialize_uint32(x)
+        for x in self.hundred_years:
+            graph_bytes += sc2s.serialize_uint32(x)
+        return graph_bytes
 
     def __str__(self):
         s = f"Year:\n\t{[x for x in self.one_year]}.\n"

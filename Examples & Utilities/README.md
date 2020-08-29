@@ -42,3 +42,11 @@ This folder contains some examples and utilities that do useful things and also 
    - Pollution
    - Traffic
    - Land Value
+
+ - `city_tools.py`: Command line utility to edit simple things about a city. This is mostly used to test editing and re-saving a city, but more things could be added here as needed.
+   - `-i`/`--input`: input .sc2 to open and generate the minimaps on.
+   - `-o`/`--output`: where to save the resulting file.
+   - `-m`/`--money`: Set an amount of money. Clamped to the maximum the game supports.
+   - `-t`/`--terrain`: Put the city into terrain edit mode, instead of city build mode.
+   - `-p`/`--pause`: Pause the game.
+   - `-n`/`--no-sound`: Turn off music and sound effects.
