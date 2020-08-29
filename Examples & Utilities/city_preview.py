@@ -322,7 +322,11 @@ def create_network_layer(city, sprites):
                 for x in range(w):
                     for y in range(h):
                         p = traffic_image.getpixel((x, y))
-                        if p != (140, 140, 140, 255):
+                        base_p = image.getpixel((x, y))
+                        # We only want to draw if we're a car (blue or black), but only on something road coloured.
+                        # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
+                        # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
+                        if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
                             mask.putpixel((x, y), p)
                 image.paste(traffic_image, (0, traffic_image_offset), mask)
         if rotate:

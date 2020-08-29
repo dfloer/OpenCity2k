@@ -7,7 +7,7 @@ This folder contains some examples and utilities that do useful things and also 
     Command line arguments:
    - `-i`/`--input`: input .sc2 to open and generate the report on.
  - `city_preview.py`: Command line utility to create a full-resolution preview image of a city.\
-    Currently very much a work in progress, but the basics of rendering a city mostly work.
+    Currently very much a work in progress, but things are generally working, though there are still bugs and tweaks/features needed.
 
     Command line arguments:
     - `-i`/`--input`: input .sc2 to open and generate the image of.
