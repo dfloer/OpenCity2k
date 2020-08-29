@@ -349,7 +349,6 @@ def get_traffic_image(tile, sprites):
                      76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419,
                      99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
     traffic = tile.traffic
-    rotate = tile.bit_flags.rotate
     heavy_offset = 27  # offset from the start that the heavy version of the traffic sprite is used.
     # Traffic threshold values. These should probably be moved to a data file or something as they're a mechanic and not part of this renderer.
     hwy_threshold = [30, 58]
@@ -361,15 +360,12 @@ def get_traffic_image(tile, sprites):
         threshold = hwy_threshold
     if traffic < threshold[0]:
         return None
-    elif traffic > threshold[1]:
+    elif traffic > threshold[1] and building_id not in (93, 94, 95, 96):
         tile_id = traffic_tiles[building_id] + heavy_offset + 1000
     else:
         tile_id = traffic_tiles[building_id] + 1000
     tile_image = sprites[tile_id]
     if tile_id in (411, 438):
-        tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
-    # Onramps behave a little strangely, this is a fix for them.
-    if rotate not in [1, 3] and building_id in [93, 94, 95, 96]:
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
     return tile_image
 
