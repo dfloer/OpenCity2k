@@ -305,7 +305,7 @@ def create_network_layer(city, sprites):
         building_id = building.building_id
         if building_id == 0:
             continue
-        image = sprites[1000 + building_id]
+        image = sprites[1000 + building_id].copy()
 
         extra = image.size[1] - 17
         shift = altitude * layer_offset
