@@ -211,11 +211,17 @@ def compress_rle(uncompressed_data):
         Compressed bytes.
     """
     # Count the bytes we have, and create a tuple (to make sure ordering is preserved) of a count and then the number of bytes following.
-    counted_bytes = ([(len(list(bytes_counted)), count) for count, bytes_counted in itertools.groupby(uncompressed_data)])
+    counted_bytes = [(len(list(bytes_counted)), count) for count, bytes_counted in itertools.groupby(uncompressed_data)]
+    # Break runs up into the maximum number of consecutive bytes allowed.
+    counted_bytes2 = []
+    for c, b in counted_bytes:
+        full_runs = c // 128
+        leftover = c % 128
+        counted_bytes2 +=  [(128, b)] * full_runs +  [(leftover, b)]
     compressed_data = bytearray()
     temp = bytearray()
     offset = 0
-    for count, byte in counted_bytes:
+    for count, byte in counted_bytes2:
         data = uncompressed_data[offset: offset + count]
         if count == 1:
             # The spec can't have more than 127 repeated bytes, so if we do, we need to start another run to encode.
