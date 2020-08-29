@@ -21,6 +21,7 @@ This folder contains some examples and utilities that do useful things and also 
    - `-i`/`--input`: input .sc2 to open and generate the minimaps on.
    - `-o`/`--output`: Directory to create the minimaps in. Will overwrite any existing ones.
    - `-p`/`--palette`: Full path to the `PAL_MSTR.BMP` file to use for the palette.
+   - `-d`/`--debug`: Draw debug minimaps that don't exist in the game and aren't particularly useful except for debugging purposed.
 
    Currently generated minimaps:
    - Structures: Only shows where structures are, base minimap in game.

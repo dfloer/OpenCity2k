@@ -14,6 +14,7 @@ def parse_command_line():
     parser.add_argument('-i', '--input', dest="input_file", help=".sc2 file top open and generate the report on", metavar="INFILE", required=True)
     parser.add_argument('-o', '--output', dest="output_dir", help="path of directory to put the minimaps in", metavar="OUTDIR", required=True)
     parser.add_argument('-p', '--palette', dest="palette", help="path to palette to load", metavar="PALETTE_PATH", required=True)
+    parser.add_argument('-d', '--debug', dest="debug", help="draw debug minimaps", required=False, action="store_true")
     args = parser.parse_args()
     return args
 
@@ -216,6 +217,44 @@ def draw_rate_of_growth(city, palette):
     return output_minimap
 
 
+def draw_corners(city, palette):
+    """
+    Map primarily for debugging purposes, draws the zone's corners.
+    Args:
+        city (City): city to create the base minimap from.
+        palette (dict): palette to use.
+    Returns:
+        A Pillow image.
+    """
+    output_minimap = Image.new('RGBA', (128, 128), (0, 0, 0, 255))
+    colours = {0b1111: (255, 0, 255), 0b0001: (255, 0, 0), 0b0010: (0, 255, 0), 0b0100: (0, 0, 255), 0b1000: (255, 255, 0)}
+    for coords, tile in city.tilelist.items():
+        v = int(tile.zone_corners, 2)
+        if v != 0:
+            output_minimap.putpixel(coords, colours[v])
+    return output_minimap
+
+
+def draw_bitflags(city, palette, flag=0):
+    """
+    Map primarily for debugging purposes, draws bitflags.
+    Bit flag is one of: "powerable", "powered", "piped", "watered", "xval", "water", "rotate" or "salt".
+    Args:
+        city (City): city to create the base minimap from.
+        palette (dict): palette to use.
+        flag (int, optional): Which of the 8 flags should be highlighted? Default = "rotate".
+    Returns:
+        A Pillow image.
+    """
+    output_minimap = Image.new('RGBA', (128, 128), (0, 0, 0, 255))
+    for coords, tile in city.tilelist.items():
+        v = getattr(tile.bit_flags, map_type)
+        if v:
+            output_minimap.putpixel(coords, (255, 255, 255))
+    return output_minimap
+
+
+
 if __name__ == "__main__":
     options = parse_command_line()
     in_filename = options.input_file
@@ -224,6 +263,7 @@ if __name__ == "__main__":
     city = sc2p.City()
     city.create_city_from_file(in_filename)
     palette = imgp.palette_dict(imgp.parse_palette(palette_path))
+    debug = options.debug
 
     base_minimap = draw_base_minimap(city, palette)
     with open(out_path / "structures.png", 'wb') as f:
@@ -257,3 +297,14 @@ if __name__ == "__main__":
     rog_minimap = draw_rate_of_growth(city, palette)
     with open(out_path / "growth_rate.png", 'wb') as f:
         rog_minimap.save(f, format="png")
+
+    # Debug minimaps. Here be dragons.
+    if debug:
+        corners_minimap = draw_corners(city, palette)
+        with open(out_path / "_debug_corners.png", 'wb') as f:
+            corners_minimap.save(f, format="png")
+
+        for map_type in ("powerable", "powered", "piped", "watered", "xval", "water", "rotate", "salt"):
+            flags_minimap = draw_bitflags(city, palette, map_type)
+            with open(out_path / f"_debug_flags-{map_type}.png", 'wb') as f:
+                flags_minimap.save(f, format="png")
