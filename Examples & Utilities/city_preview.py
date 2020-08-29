@@ -122,6 +122,9 @@ def create_buildings(city, sprites):
                 Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
     """
     building_sprites = {}
+    # Not all buildings should be rotated when the sprites are rotated on map rotation.
+    # Notably highway pieces.
+    do_not_rotate_ids = list(range(0x49, 0x50 + 1)) + list(range(0x61, 0x69 + 1))
     for k in city.buildings.keys():
         row, col = k
         tile = city.tilelist[(row, col)]
@@ -161,7 +164,7 @@ def create_buildings(city, sprites):
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
         # On two of the rotation settings, sprites are flipped.
-        if city.simulator_settings["Compass"] in (1, 3):
+        if city.simulator_settings["Compass"] in (1, 3) and building_id not in do_not_rotate_ids:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
         i = (row * 16 - col * 16) + w_offset
         j = (row * 8 + col * 8) + h_offset + shift - extra
@@ -259,7 +262,8 @@ def create_groundcover_layer(city, sprites):
         if building_id == 0:
             continue
         image = sprites[1000 + building_id]
-
+        if tile.bit_flags.rotate:
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
         extra = image.size[1] - 17
         shift = altitude * layer_offset
         # Special handling for the 1x1x1 cube terrain piece.

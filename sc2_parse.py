@@ -316,7 +316,7 @@ class City:
             print(f"City has rotation {city_rotation}.")
 
         groundcover_ids = list(range(0x01, 0x0D + 1))
-        network_ids = list(range(0x0E, 0x79 + 1))
+        network_ids = list(range(0x0E, 0x60 + 1))
 
         raw_xbld = raw_sc2_data["XBLD"]
         for row in range(self.city_size):
