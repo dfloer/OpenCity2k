@@ -1020,7 +1020,7 @@ class Thing:
         self.rotation_2 = raw_thing[2]
         self.x = raw_thing[3]
         self.y = raw_thing[4]
-        self.data = [raw_thing[x] for x in range(4, 11)]
+        self.data = [raw_thing[x] for x in range(5, 12)]
 
     def serialize_thing(self):
         """
