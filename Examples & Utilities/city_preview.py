@@ -136,12 +136,14 @@ def create_buildings(city, sprites):
             building_id = tile.building.building_id
         except AttributeError:
             continue
+        # This can happen with magic erased buildings, and we shouldn't attempt to draw them.
+        if building_id == 0:
+            continue
 
         if altitude < water_table_level:
             altitude = water_table_level
             if tile.terrain == 0x0D:
                 altitude -= 1
-
         image = sprites[1000 + building_id]
         building_size = get_building_size(building_id)
 
