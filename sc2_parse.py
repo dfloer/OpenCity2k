@@ -316,7 +316,8 @@ class City:
             print(f"City has rotation {city_rotation}.")
 
         groundcover_ids = list(range(0x01, 0x0D + 1))
-        network_ids = list(range(0x0E, 0x60 + 1))
+        network_ids = list(range(0x0E, 0x6B + 1))
+        highway_2x2_ids = list(range(0x61, 0x6B + 1))
 
         raw_xbld = raw_sc2_data["XBLD"]
         for row in range(self.city_size):
@@ -330,7 +331,11 @@ class City:
                     building_id = raw_xbld[tile_idx]
                     new_building = Building(building_id, (row, col))
                     self.buildings[(row, col)] = new_building
-                    self.tilelist[(row, col)].building = new_building
+                    # Certain highway pieces are 2x2 buildings, but should only be in networks.
+                    if building_id in network_ids:
+                        self.networks[(row, col)] = new_building
+                    else:
+                        self.tilelist[(row, col)].building = new_building
                     building_size = buildings.get_size(building_id)
                     if self.debug:
                         print(f"Found Building: {building_id} with size: {building_size} at ({row}, {col})")
@@ -344,7 +349,11 @@ class City:
                             next_tile_idx = building_x * self.city_size + building_y
                             new_building_id = raw_xbld[next_tile_idx]
                             if new_building_id == building_id:
-                                self.tilelist[(building_x, building_y)].building = new_building
+                                # Certain highway pieces are 2x2 buildings, but should only be in networks.
+                                if building_id in network_ids:
+                                    self.networks[(building_x, building_y)] = new_building
+                                else:
+                                    self.tilelist[(building_x, building_y)].building = new_building
                                 if self.debug:
                                     print(f"Added Building: {new_building_id} at ({building_x}, {building_y})")
                             else:
@@ -362,7 +371,8 @@ class City:
                         self.tilelist[(row, col)].building = new_building
                         if self.debug:
                             print(f"Found groundcover: {building_id} at ({row}, {col})")
-                    elif building_id in network_ids:
+                    # We've already added the highways to the network.
+                    elif building_id in network_ids and building_id not in highway_2x2_ids:
                         new_building = Building(building_id, (row, col))
                         self.networks[(row, col)] = new_building
                         self.tilelist[(row, col)].building = new_building
