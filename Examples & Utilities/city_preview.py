@@ -305,14 +305,14 @@ def create_network_layer(city, sprites):
         building_id = building.building_id
         if building_id == 0:
             continue
-        image = sprites[1000 + building_id]
+        image = sprites[1000 + building_id].copy()
 
         extra = image.size[1] - 17
         shift = altitude * layer_offset
         if terrain == 0x0D:
             shift += layer_offset
         if building_id in traffic_tiles.keys():
-            traffic_image = get_traffic_image(tile, sprites)
+            traffic_image = get_traffic_image(tile, city.networks, sprites)
             if traffic_image:
                 traffic_image_offset = image.size[1] - traffic_image.size[1]
                 # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
@@ -322,19 +322,23 @@ def create_network_layer(city, sprites):
                 for x in range(w):
                     for y in range(h):
                         p = traffic_image.getpixel((x, y))
-                        if p != (140, 140, 140, 255):
+                        base_p = image.getpixel((x, y))
+                        # We only want to draw if we're a car (blue or black), but only on something road coloured.
+                        # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
+                        # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
+                        if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
                             mask.putpixel((x, y), p)
                 image.paste(traffic_image, (0, traffic_image_offset), mask)
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
-
-        i = (row * 16 - col * 16) + w_offset
-        j = (row * 8 + col * 8) + h_offset + shift - extra
-        network_sprites[(row, col)] = {"pixel": (i, j), "image": image}
+        r, c = building.tile_coords
+        i = (r * 16 - c * 16) + w_offset
+        j = (r * 8 + c * 8) + h_offset + shift - extra
+        network_sprites[(r, c)] = {"pixel": (i, j), "image": image}
     return network_sprites
 
 
-def get_traffic_image(tile, sprites):
+def get_traffic_image(tile, networks, sprites):
     """
     Gets the traffic image for a certain tile.
     Traffic threshold values pulled from the game. First value is from (visually) no traffic to normal traffic, and the second is the traffic value to go from normal traffic to heavy traffic.
@@ -349,27 +353,23 @@ def get_traffic_image(tile, sprites):
                      76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419,
                      99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
     traffic = tile.traffic
-    rotate = tile.bit_flags.rotate
     heavy_offset = 27  # offset from the start that the heavy version of the traffic sprite is used.
     # Traffic threshold values. These should probably be moved to a data file or something as they're a mechanic and not part of this renderer.
     hwy_threshold = [30, 58]
     road_threshold = [86, 172]
-    building_id = tile.building.building_id
+    building_id = networks[tile.coordinates].building_id
     if building_id < 44:
         threshold = road_threshold
     else:
         threshold = hwy_threshold
     if traffic < threshold[0]:
         return None
-    elif traffic > threshold[1]:
+    elif traffic > threshold[1] and building_id not in (93, 94, 95, 96):
         tile_id = traffic_tiles[building_id] + heavy_offset + 1000
     else:
         tile_id = traffic_tiles[building_id] + 1000
     tile_image = sprites[tile_id]
     if tile_id in (411, 438):
-        tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
-    # Onramps behave a little strangely, this is a fix for them.
-    if rotate not in [1, 3] and building_id in [93, 94, 95, 96]:
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
     return tile_image
 
