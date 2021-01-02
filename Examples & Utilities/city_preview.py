@@ -306,31 +306,26 @@ def create_network_layer(city, sprites):
         if building_id == 0:
             continue
         image = sprites[1000 + building_id].copy()
-
         extra = image.size[1] - 17
         shift = altitude * layer_offset
         if terrain == 0x0D:
             shift += layer_offset
         if building_id in traffic_tiles.keys():
-            traffic_image = get_traffic_image(tile, city.networks, sprites)
-            if traffic_image:
-                traffic_image_offset = image.size[1] - traffic_image.size[1]
-                # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
-                # There's probably a better way of doing this, but it works for now.
-                mask = Image.new('RGBA', (traffic_image.size), (0, 0, 0, 0))
-                w, h = traffic_image.size
-                for x in range(w):
-                    for y in range(h):
-                        p = traffic_image.getpixel((x, y))
-                        base_p = image.getpixel((x, y))
-                        # We only want to draw if we're a car (blue or black), but only on something road coloured.
-                        # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
-                        # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
-                        if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
-                            mask.putpixel((x, y), p)
-                image.paste(traffic_image, (0, traffic_image_offset), mask)
+            image = composite_traffic(tile, city, sprites, image)
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        # Highways are weird and need to be handled specially, or they "float".
+        # Todo: this still has a bug in it, because highways should be drawn in the buildings layer, probably.
+        # Ramps
+        if building_id == 97:
+            shift += 7
+        elif building_id in (98, 99):
+            shift += 20
+        elif building_id == 100:
+            shift += 8
+        # Corners, Interchange, Reinforced Bridge
+        elif building_id in (100, 101, 102, 103, 104, 105, 106, 107):
+            shift += 8
         r, c = building.tile_coords
         i = (r * 16 - c * 16) + w_offset
         j = (r * 8 + c * 8) + h_offset + shift - extra
@@ -371,6 +366,38 @@ def get_traffic_image(tile, networks, sprites):
     tile_image = sprites[tile_id]
     if tile_id in (411, 438):
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
+    return tile_image
+
+def composite_traffic(tile, city, sprites, tile_image):
+    """
+    Handles compositing of the traffic tile onto the road exactly as the game does it.
+    This keeps traffic from drawing over power lines, but also means that it draws under crosswalks.
+    Args:
+        tile (Tile): Tile data to work with.
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        tile_image (Image): Road tile image to composite on top of.
+
+    Returns:
+        Image: Composited traffic tile image.
+    """
+    traffic_image = get_traffic_image(tile, city.networks, sprites)
+    if traffic_image:
+        traffic_image_offset = tile_image.size[1] - traffic_image.size[1]
+        # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
+        # There's probably a better way of doing this, but it works for now.
+        mask = Image.new('RGBA', (traffic_image.size), (0, 0, 0, 0))
+        w, h = traffic_image.size
+        for x in range(w):
+            for y in range(h):
+                p = traffic_image.getpixel((x, y))
+                base_p = tile_image.getpixel((x, y))
+                # We only want to draw if we're a car (blue or black), but only on something road coloured.
+                # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
+                # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
+                if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
+                    mask.putpixel((x, y), p)
+        tile_image.paste(traffic_image, (0, traffic_image_offset), mask)
     return tile_image
 
 def create_things_layer(city, sprites):
