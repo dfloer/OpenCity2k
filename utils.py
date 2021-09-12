@@ -247,3 +247,91 @@ def int_to_n_bits(integer, num_bits):
         A binary string representation of the integer.
     """
     return f"{integer:0{num_bits}b}"
+
+
+"""
+The follow utilities are ones that have been solely used for reverse engineering and documentation efforts and aren't use anywhere in the game file parsing.
+"""
+
+def data_in_many_formats(raw_data):
+    """
+    Prints the input data and prints it in as many formats as possible.
+    Args:
+        raw_data (bytes): input data.
+    """
+    lr = len(raw_data)
+    print("raw len:", lr)
+    print("raw")
+    print([hex(x) for x in raw_data])
+    print("int8")
+    res = [x for x in raw_data]
+    print(res)
+    print("ascii")
+    res = [chr(x) for x in raw_data]
+    print(res)
+    nm = {"int16": 'h', "int32": 'i', "uint16": 'H', "uint32": 'I', "float16": 'e', "float32": 'f', "float64": 'd'}
+    em = {'b': '>', 'l': '<'}
+
+    m = {ek + " " + nk: ev + nv for nk, nv in nm.items() for ek, ev in em.items()}
+    for name, fmt in m.items():
+        sz = int(''.join([x for x in name if x.isdigit()])) // 8
+        print(name)
+        res = try_parse(fmt, raw_data, sz)
+        print(res)
+
+def try_parse(fmt, data, size):
+    try:
+        res = [unpack(fmt, data[x : x + size])[0] for x in range(0, len(data), size)]
+    except:
+        res = "Error"
+    return res
+
+
+def article_metadata_markdown(d):
+    """
+    A simple function to take the values from bracket_replace and make them into a nice markdown table.
+    """
+    articles = (0x00, 0x43)
+    complex_tokens = (0x43, 0x6B)
+    simple_tokens = (0x6B, 0xCE)
+    header = ("Value", "Group")
+
+    x = {k: d[k] for k in range(*articles)}
+    generate_table(x, header, 4)
+    print("\n\n")
+    x = {k: d[k] for k in range(*complex_tokens)}
+    generate_table(x, header, 4)
+    print("\n\n")
+    x = {k: d[k] for k in range(*simple_tokens)}
+    generate_table(x, header, 4)
+
+
+def generate_table(d, h, c, ju='<'):
+    """
+    Turns a dict into a c * 2 column wide table and prints it.
+    Args:
+        d (dict): dict to make into a table.
+        h (tuple): ("header, "header1") values.
+        c (int): How many cols of values. 4 = 8 total columns.
+        ju (str, optional): Justtification, as per f-string standard. Defaults to < (left).
+    """
+    l = len(d)
+    sz = round(l / c)
+    v_max = max(max([len(a) for a in d.values()]), len(h[1]))
+    k_max = max(4, len(h[0]))
+    for i in range(4):
+        print(f"| {h[0]:{ju}{k_max}} | {h[1]:{ju}{v_max}} ", end='')
+    print('|')
+    dash = '-'
+    for i in range(4):
+        print(f"|-{'':{dash}{ju}{k_max}}-|-{'':{dash}{ju}{v_max}}-", end='')
+    print('|')
+    for i in range(min(d.keys()), min(d.keys()) + sz):
+        for j in range(4):
+            k = i + j * sz
+            kh = f"0x{k:02X}"
+            if k in d:
+                print(f"| {kh:{ju}{k_max}} | {d[k]:{ju}{v_max}} ", end='')
+            else:
+                print(f"| {'':{ju}{k_max}} | {'':{ju}{v_max}} ", end='')
+        print('|')
