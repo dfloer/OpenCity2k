@@ -1,40 +1,13 @@
 import argparse
 from collections import OrderedDict
 import struct
+import json
 
 
 # Documentation for what this script is doing can be found at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
 # As the spec is incomplete, this parsing is also incomplete.
 
-
-def parse_command_line():
-    """
-    Set up command line arguments.
-    Args:
-        None.
-    Returns:
-        Argparse object for setting up command line arguments.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', dest="input_file", help="path to directory containing DATA_USA.DAT and DATA_USA.IDX", metavar="PATH", required=True)
-    parser.add_argument('-o', '--output', dest="output_file", help="out file", metavar="FILE", required=True)
-    parser.add_argument('-d', '--debug', dest="debug", help="Debug printing enables.", required=False, default=False, nargs='?')
-    args = parser.parse_args()
-    return args
-
-
-def parse_data_usa(raw_data, raw_idx, debug):
-    """
-    Uncompressed and parses the DATA_USA.DAT newspaper file into a more usable form. Full details in DATA_USA.DAT format spec doc at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
-    Uses a token lookup table to replace various single byte tokens with their ASCII values and another lookup table for "bracket" escaped values.
-    Args:
-        raw_data (bytes): complete data_usa.dat in raw, uncompressed form.
-        raw_idx (bytes): complete data_usa.dat in raw form.
-        debug (bool): if true, print extra (a lot extra!) debug output.
-    Returns:
-        A list of single item dictionaries of the form {key given in the index file: parsed/uncompressed string representation of the data}.
-    """
-    token_lookup_table = OrderedDict([
+token_lookup_table = OrderedDict([
         (0x0, 'None'),
         (0x01, 'th'),
         (0x02, 'in'),
@@ -96,8 +69,8 @@ def parse_data_usa(raw_data, raw_idx, debug):
         (0x3a, ':'),
         (0x3b, ';'),
         (0x3c, '<'),
-        (0x3d, '=CITYNAME'),  # =
-        (0x3e, '>TEAMNAME'),  # >
+        (0x3d, '{CITYNAME}'),  # =
+        (0x3e, '{TEAMNAME}'),  # >
         (0x3f, '?'),
         (0x40, '@'),
         (0x41, 'A'),
@@ -161,7 +134,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
         (0x7b, '{'),
         (0x7c, '|'),
         (0x7d, '}'),
-        (0x7e, '~MAYORNAME'),  # ~
+        (0x7e, '{MAYORNAME}'),  # ~
         (0x7f, 'wi'),
         (0x80, ''),
         (0x81, ''),
@@ -292,11 +265,93 @@ def parse_data_usa(raw_data, raw_idx, debug):
         (0xfe, 'ai'),
         (0xff, 'ur'), ])
 
-    bracket_contents = \
-        {0x4B: "foundingreaction",
+bracket_contents = \
+        {
+         0x00: "genweatherstory",
+         0x01: "sciencestory",
+         0x02: "foundingstory",
+         0x03: "genpopulationstory",
+         0x04: "invention2story",
+         0x05: "inventionstory",
+         0x06: "warstory",
+         0x07: "businessstory",
+         0x08: "sportsstory",
+         0x09: "fedrateupstory",
+         0x0a: "fedratedownstory",
+         0x0b: "nationalpolitical",
+         0x0c: "internationalstory",
+         0x0d: "gendisasterstory",
+         0x0e: "healthstory",
+         0x0f: "localpoliticalstory",
+         0x10: "highcrime",
+         0x11: "hightraffic",
+         0x12: "highpollution",
+         0x13: "loweducation",
+         0x14: "lowhealthcare",
+         0x15: "highunemployment",
+         0x16: "disasterfire",
+         0x17: "disasterflood",
+         0x18: "disasterplane",
+         0x19: "disasterhelicopter",
+         0x1a: "disastertornado",
+         0x1b: "disastereqarthquake",
+         0x1c: "disastermonster",
+         0x1d: "disastermeltdown",
+         0x1e: "disastermicrowave",
+         0x1f: "disastervolcano",
+         0x20: "disasterspill",
+         0x21: "disastermajorspill",
+         0x22: "disasterhurricane",
+         0x23: "disasterriot",
+         0x24: "oldpowerplant",
+         0x25: "fundprison",
+         0x26: "fundeducation",
+         0x27: "fundtransit",
+         0x28: "treeremoval",
+         0x29: "gennewordinancestory",
+         0x2a: "genrichopoinionstory",
+         0x2b: "genrichgripestory",
+         0x2c: "genopiniongripe",
+         0x2d: "missimquestion",
+         0x2e: "needpower",
+         0x2f: "needroad",
+         0x30: "needpolice",
+         0x31: "needfire",
+         0x32: "needwater",
+         0x33: "needhospital",
+         0x34: "needschool",
+         0x35: "needseaport",
+         0x36: "needairport",
+         0x37: "needzoo",
+         0x38: "stadiumneed",
+         0x39: "needmarina",
+         0x3a: "needpark",
+         0x3b: "needseapoer",
+         0x3c: "needconnections",
+         0x3d: "lowcrime",
+         0x3e: "highrating",
+         0x3f: "lowpollution",
+         0x40: "higheducation",
+         0x41: "highhealth",
+         0x42: "lowunemployment",
+         0x43: "ordinance",
+         0x44: "ordinanceopinion",
+         0x45: "otherfire",
+         0x46: "otherflood",
+         0x47: "otherrailcrash",
+         0x48: "othertornado",
+         0x49: "otherearthquake",
+         0x4A: "othermonster",
+         0x4B: "foundingreaction",
+         0x4C: "populationstory",
          0x4D: "reaction",
          0x4E: "missimanswer",
          0x4F: "gripeclosing",
+         0x50: "weatherreport",
+         0x51: "weatherprediction",
+         0x52: "richopinion",
+         0x53: "richgripe",
+         0x54: "opiniongripe",
          0x55: "gripe1",
          0x56: "gripe2",
          0x57: "gripe3",
@@ -311,6 +366,14 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x60: "employment",
          0x61: "education",
          0x62: "health",
+         0x63: "articlepointers",
+         0x64: "ordinanceheadline",
+         0x65: "weatherheadline",
+         0x66: "populationheadline",
+         0x67: "gripeheadline1",
+         0x68: "gripeheadline2",
+         0x69: "gripeheadline3",
+         0x6A: "disasterheadline",
          0x6B: "destroyverb",
          0x6C: "creationverb",
          0x6D: "pastcreationverb",
@@ -328,11 +391,11 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x79: "scareverb",
          0x7A: "violentverb",
          0x7B: "pastviolentverb",
-         0x7C: "verb1",
-         0x7D: "verb2",
-         0x7E: "presemtverb1",
-         0x7F: "help",
-         0x80: "pasthelp",
+         0x7C: "observedverb",
+         0x7D: "angerverb",
+         0x7E: "presentverb1",
+         0x7F: "want",
+         0x80: "pastwant",
          0x81: "negativeverb",
          0x82: "pastverb",
          0x83: "thingdescriptor",
@@ -357,7 +420,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x96: "action2",
          0x97: "country",
          0x98: "criminal",
-         0x99: "crime",
+         0x99: "crimetype",
          0x9A: "infrastructure",
          0x9B: "direction",
          0x9C: "illness2",
@@ -371,11 +434,11 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0xA4: "foreignlastname",
          0xA5: "2xforeignname",
          0xA6: "name",
-         0xA7: "NGO",
+         0xA7: "ngo",
          0xA8: "room",
          0xA9: "numericposition",
          0xAA: "invention",
-         0xAB: "invetion2",
+         0xAB: "invention2",
          0xAC: "politicalissue",
          0xAD: "product",
          0xAE: "size",
@@ -412,13 +475,62 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0xCD: "weathercondition",
          0xCE: "weekday", }
 
+def parse_command_line():
+    """
+    Set up command line arguments.
+    Args:
+        None.
+    Returns:
+        Argparse object for setting up command line arguments.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', dest="input_file", help="path to directory containing DATA_USA.DAT and DATA_USA.IDX", metavar="PATH", required=True)
+    parser.add_argument('-o', '--output', dest="output_file", help="out file", metavar="FILE", required=True)
+    parser.add_argument('-d', '--debug', dest="debug", help="Debug printing enables.", required=False, default=False, nargs='?')
+    parser.add_argument('-j', '--json', dest="json_file", help="json out file", required=False, default=False, nargs='?')
+    args = parser.parse_args()
+    return args
+
+
+def parse_data_usa(raw_data, raw_idx, debug):
+    """
+    Uncompressed and parses the DATA_USA.DAT newspaper file into a more usable form. Full details in DATA_USA.DAT format spec doc at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
+    Uses a token lookup table to replace various single byte tokens with their ASCII values and another lookup table for "bracket" escaped values.
+    Args:
+        raw_data (bytes): complete data_usa.dat in raw, uncompressed form.
+        raw_idx (bytes): complete data_usa.dat in raw form.
+        debug (bool): if true, print extra (a lot extra!) debug output.
+    Returns:
+        A list of single item dictionaries of the form {key given in the index file: parsed/uncompressed string representation of the data}.
+    """
+    # Add a check to make sure names aren't duplicated.
+    bcv = bracket_contents.values()
+    bcs = set([x for x in bracket_contents.values()])
+    if len(bcs) != len(bcv):
+        dupes = [x for x in bcs if list(bcv).count(x) != 1]
+        raise AssertionError("Duplicate values in bracket_contents: " + ', '.join(dupes))
+
+    idx_names = {
+        1: "Group Start",
+        2: "Group Count",
+        3: "Token Pointer",
+        4: "Token Data",
+        5: "Story Power",
+        6: "Story Decay"
+    }
+
     # Read the index in reverse order. This means we always know where the last segment started, so calculating the length of the segment is easy.
     idx_contents = OrderedDict()
     last = len(raw_data)
     for idx in range(len(raw_idx), 0, -8):
+        # because each is offset by 8B.
+        idx_name = idx_names[idx // 8]
         idx_file_id = struct.unpack('<I', raw_idx[idx - 8: idx - 4])[0]
+        if debug:
+            print("IDX file_id: " + str(idx_file_id) + " = " + idx_name)
         idx_file_length = struct.unpack('<I', raw_idx[idx - 4: idx])[0]
-        idx_contents[idx_file_id] = [idx_file_length, last]
+
+        idx_contents[idx_name] = [idx_file_length, last]
         last = idx_file_length
 
     # Reverse the index metadata (so it's the right way around now) and pull segments from the raw data.
@@ -427,78 +539,152 @@ def parse_data_usa(raw_data, raw_idx, debug):
     for segment_id, segment_offsets in sorted_idx_contents.items():
         data_segments[segment_id] = raw_data[segment_offsets[0]: segment_offsets[1]]
         if debug:
-            debug_message = "{}: [{}, {}], len={}".format(hex(segment_id), hex(segment_offsets[0]), hex(segment_offsets[1]), len(data_segments[segment_id]))
+            debug_message = "{}: [{}, {}], len={}".format(segment_id, hex(segment_offsets[0]), hex(segment_offsets[1]), len(data_segments[segment_id]))
             print(debug_message)
 
-    # Uncompress raw segments.
-    parsed_data = OrderedDict()
-    for segment_id, segment_data in data_segments.items():
-        parsed_data[segment_id] = parse_chunk(segment_data, token_lookup_table, bracket_contents, debug)
 
-    if debug:
-        for k, v in parsed_data.items():
-            print(
-                "\n\n----------------\n " + hex(k) + " : " + str(len(v)) + '/' + hex(len(v)) + "\n----------------\n\n")
-            s = ''
-            for kk, vv in v.items():
-                s += "({}: '{}'), ".format(hex(kk), vv)
-            print(s)
-    output = [{segment_id: segment_data} for segment_id, segment_data in parsed_data.items()]
-    return output
+    group_start_data = data_segments["Group Start"]
+    group_count_data = data_segments["Group Count"]
+    groups = parse_groups(group_start_data, group_count_data)
+    pointer_data = data_segments["Token Pointer"]
+    pointers = parse_pointers(pointer_data)
+
+    text_data = pointer_data = data_segments["Token Data"]
+    parsed_text_data, group_names = parse_text(text_data, pointers, groups, token_lookup_table, bracket_contents, debug)
+    return parsed_text_data, group_names
 
 
-def parse_chunk(raw_data, token_lookup_table, bracket_contents, debug):
+def parse_pointers(pointer_data):
+    """
+    Parses the pointer segment of the data file and returns the pointers. Each is a 4B int.
+    Args:
+        pointer_data (bytes): Raw data to parse.
+    Returns:
+        list: List ot pointers
+    """
+    pointers = []
+    for idx in range(0, len(pointer_data), 4):
+        pointers += [struct.unpack('>I', pointer_data[idx : idx + 4])[0] ]
+    return pointers
+
+
+def parse_groups(group_start, group_count):
+    """
+    Tokens are stored as groups
+    Args:
+        group_start ([type]): [description]
+        group_count ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+    grp_start = []
+    grp_count = []
+    assert len(group_start) == len(group_count)
+    for idx in range(0, len(group_start), 2):
+        grp_start += [struct.unpack('>H', group_start[idx : idx + 2])[0]]
+        grp_count += [struct.unpack('>H', group_count[idx : idx + 2])[0]]
+    res = OrderedDict((k, v) for k, v in zip(grp_start, grp_count) if k != 0 or v != 0)
+    return res
+
+
+def parse_text(raw, pointers, groups, lookup, bracket, debug):
     """
     Handles actually turning the compressed data back into useful text. Right now puts placeholder "pointers" to the various madlibs-esque words/short phrases etc. to fill in. Full details in data_usa.dat file spec.
     Args:
-        raw_data (bytes): complete data_usa.dat in raw, uncompressed form.
-        token_lookup_table (dict): lookup table for token values.
-        bracket_contents (dict): lookup table for escaped token values.
+        raw (bytes): complete data_usa.dat in raw, uncompressed form.
+        pointers (list): List of pointers to each token.
+        groups (dict): Dictionary of {start_offset: token count} values.
+        lookup (dict): lookup table for token values.
+        bracket (dict): lookup table for escaped token values.
         debug (bool): if true, print extra (a lot extra!) debug output.
     Returns:
         A dictionary of uncompressed data, with the keys being the same as the segments passed in.
     """
-    output_dict = OrderedDict()
-    for idx, entry in enumerate(raw_data.split(b'\x00')):
-        parsed_chunk = ''
+    tokens = []
+    # Parse raw data into tokens, based on pointers from the token pointers.
+    for i, p in enumerate(pointers):
+        if p == 0:
+            continue
+        next_p = pointers[i + 1]
+        entry = raw[p : next_p]
+        # If we're on the last entry, there isn't a next pointer, so we want to take the rest of the list.
+        if next_p == 0:
+            entry = raw[p : ]
+        if debug:
+            print("i", i, "p", p, "np", next_p, "len", len(entry))
+
+        entry = entry[: -1]
+        if debug:
+            print(entry)
 
         token_idx = 0
+        parsed_chunk = ''
         while token_idx < len(entry):
             token = entry[token_idx]
             lookup_idx = int(token)
-            token_value = token_lookup_table[lookup_idx]
-            if token_value == '':
-                token_value = '[{}]'.format(hex(token))
+            token_value = lookup.get(lookup_idx, hex(token))
             if token_value == '\\':
                 token_value = ''  # Handle escape characters from the file.
-
             if token_value in ('*', '[', '^', '@', '&') and (token_idx + 1) != len(entry):
                 token_idx += 1
                 bracket_arg = int(entry[token_idx])
-                if token_value in ('@', '^', '&'):
+                if token_value in ('*', '@', '^', '&'):
                     token_extra = token_value
                 else:
                     token_extra = ''
-                if bracket_arg in bracket_contents.keys():
-                    token_value = '[' + token_extra + bracket_contents[bracket_arg].upper() + ']'
+                if bracket_arg in bracket.keys():
+                    token_value = '{' + token_extra + bracket[bracket_arg].upper() + '}'
                 elif bracket_arg == 0x20:
-                    token_value = '& '  # the '&' character is used as an escape for certain tokens, so it has it's own sequence.
+                    token_value = '0x20'  # the '&' character is used as an escape for certain tokens, so it has it's own sequence.
                 else:
-                    token_value = '[' + token_extra + hex(bracket_arg) + ']'
-
+                    token_value = '{' + token_extra + hex(bracket_arg) + '}'
             parsed_chunk += token_value
             token_idx += 1
+        tokens += [parsed_chunk]
 
-        if debug:
-            print("index:", idx)
-            raw = ''.join(['\\' + hex(c) for c in entry])
-            print("raw:", raw)
-            print("raw+:", entry)
-            print("parsed:", parsed_chunk)
-            print("----------------")
-        output_dict[idx] = parsed_chunk
-    return output_dict
+    # Arrange the tokens into their groups.
+    grouped_tokens = OrderedDict()
+    for gidx, cnt in groups.items():
+        gidx = gidx - 1
+        end = gidx + cnt
+        grouped_tokens[gidx] = tokens[gidx : end]
 
+    # Find the name associated with a group.
+    # This is a bit weird because we want to match with the list of bracket escaped tokens in reverse.
+    # Which means we need to un-reverse to get the correct ordering back.
+    group_names = OrderedDict()
+    kr = list(reversed(list(grouped_tokens)))
+    # offset = 0x4B
+    offset = 0
+    end = 0xCE
+    ids = [x for x in range(end - offset, 0, -1)]
+    for idx, x in enumerate(kr):
+        r_idx = abs(-end + idx)
+        if idx <= len(ids):
+            val = bracket.get(r_idx, hex(r_idx))
+            group_names[x] = bracket.get(r_idx, val)
+        elif idx > end - offset:
+            group_names[x] = hex(r_idx)
+
+    return grouped_tokens, group_names
+
+
+def generate_output(grouped_tokens, group_names):
+    ls = ''
+    for k, v in grouped_tokens.items():
+        n = group_names.get(k, '')
+        name = ''
+        if n:
+            name = " (" + n + ")"
+        ls += "``````````````````````````\nGroup ID: " + str(k) + name + '\n'
+        for i, e in enumerate(v):
+            ls += "token " + str(i) + ": " + e + "\n\n"
+    return ls
+
+def output_as_json(grouped_tokens, group_names):
+    out = {group_names[k]: v for k, v in grouped_tokens.items()}
+    return json.dumps(out)
 
 if __name__ == "__main__":
     options = parse_command_line()
@@ -506,6 +692,7 @@ if __name__ == "__main__":
     input_path = options.input_file
     output_path = options.output_file
     debug = options.debug
+    output_path_json = options.json_file
     files = ["DATA_USA.DAT", "DATA_USA.IDX"]
 
     with open(input_path + files[0], 'rb') as f:
@@ -516,14 +703,12 @@ if __name__ == "__main__":
     if debug is None:
         debug = True
 
-    output = parse_data_usa(raw_unparsed_data, raw_idx, debug)
+    output, names = parse_data_usa(raw_unparsed_data, raw_idx, debug)
     with open(output_path, 'w') as f:
-        for x in output:
-            for k, v in x.items():
-                segment_break = "----------------\n{}: {}/{} \n----------------\n".format(hex(k), hex(len(v)),
-                                                                                          str(len(v)))
-                f.write(segment_break)
-                for line in v.values():
-                    if line != '':
-                        f.write(line)
-                        f.write('\n')
+        print("output written to: ", str(output_path))
+        f.write(generate_output(output, names))
+
+    if output_path_json:
+        with open(output_path_json, 'w') as f:
+            print("output written to: ", str(output_path_json))
+            f.write(output_as_json(output, names))
