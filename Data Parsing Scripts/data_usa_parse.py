@@ -1,40 +1,13 @@
 import argparse
 from collections import OrderedDict
 import struct
+import json
 
 
 # Documentation for what this script is doing can be found at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
 # As the spec is incomplete, this parsing is also incomplete.
 
-
-def parse_command_line():
-    """
-    Set up command line arguments.
-    Args:
-        None.
-    Returns:
-        Argparse object for setting up command line arguments.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', dest="input_file", help="path to directory containing DATA_USA.DAT and DATA_USA.IDX", metavar="PATH", required=True)
-    parser.add_argument('-o', '--output', dest="output_file", help="out file", metavar="FILE", required=True)
-    parser.add_argument('-d', '--debug', dest="debug", help="Debug printing enables.", required=False, default=False, nargs='?')
-    args = parser.parse_args()
-    return args
-
-
-def parse_data_usa(raw_data, raw_idx, debug):
-    """
-    Uncompressed and parses the DATA_USA.DAT newspaper file into a more usable form. Full details in DATA_USA.DAT format spec doc at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
-    Uses a token lookup table to replace various single byte tokens with their ASCII values and another lookup table for "bracket" escaped values.
-    Args:
-        raw_data (bytes): complete data_usa.dat in raw, uncompressed form.
-        raw_idx (bytes): complete data_usa.dat in raw form.
-        debug (bool): if true, print extra (a lot extra!) debug output.
-    Returns:
-        A list of single item dictionaries of the form {key given in the index file: parsed/uncompressed string representation of the data}.
-    """
-    token_lookup_table = OrderedDict([
+token_lookup_table = OrderedDict([
         (0x0, 'None'),
         (0x01, 'th'),
         (0x02, 'in'),
@@ -292,7 +265,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
         (0xfe, 'ai'),
         (0xff, 'ur'), ])
 
-    bracket_contents = \
+bracket_contents = \
         {
          0x00: "genweatherstory",
          0x01: "sciencestory",
@@ -317,7 +290,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x14: "lowhealthcare",
          0x15: "highunemployment",
          0x16: "disasterfire",
-         0x17: "disasterfire",
+         0x17: "disasterflood",
          0x18: "disasterplane",
          0x19: "disasterhelicopter",
          0x1a: "disastertornado",
@@ -418,8 +391,8 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x79: "scareverb",
          0x7A: "violentverb",
          0x7B: "pastviolentverb",
-         0x7C: "verb1",
-         0x7D: "verb2",
+         0x7C: "observedverb",
+         0x7D: "angerverb",
          0x7E: "presentverb1",
          0x7F: "want",
          0x80: "pastwant",
@@ -447,7 +420,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0x96: "action2",
          0x97: "country",
          0x98: "criminal",
-         0x99: "crime",
+         0x99: "crimetype",
          0x9A: "infrastructure",
          0x9B: "direction",
          0x9C: "illness2",
@@ -461,7 +434,7 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0xA4: "foreignlastname",
          0xA5: "2xforeignname",
          0xA6: "name",
-         0xA7: "NGO",
+         0xA7: "ngo",
          0xA8: "room",
          0xA9: "numericposition",
          0xAA: "invention",
@@ -501,6 +474,41 @@ def parse_data_usa(raw_data, raw_idx, debug):
          0xCC: "governmentthing",
          0xCD: "weathercondition",
          0xCE: "weekday", }
+
+def parse_command_line():
+    """
+    Set up command line arguments.
+    Args:
+        None.
+    Returns:
+        Argparse object for setting up command line arguments.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', dest="input_file", help="path to directory containing DATA_USA.DAT and DATA_USA.IDX", metavar="PATH", required=True)
+    parser.add_argument('-o', '--output', dest="output_file", help="out file", metavar="FILE", required=True)
+    parser.add_argument('-d', '--debug', dest="debug", help="Debug printing enables.", required=False, default=False, nargs='?')
+    parser.add_argument('-j', '--json', dest="json_file", help="json out file", required=False, default=False, nargs='?')
+    args = parser.parse_args()
+    return args
+
+
+def parse_data_usa(raw_data, raw_idx, debug):
+    """
+    Uncompressed and parses the DATA_USA.DAT newspaper file into a more usable form. Full details in DATA_USA.DAT format spec doc at: https://github.com/dfloer/SC2k-docs/blob/master/text%20data%20spec.md#newspapers
+    Uses a token lookup table to replace various single byte tokens with their ASCII values and another lookup table for "bracket" escaped values.
+    Args:
+        raw_data (bytes): complete data_usa.dat in raw, uncompressed form.
+        raw_idx (bytes): complete data_usa.dat in raw form.
+        debug (bool): if true, print extra (a lot extra!) debug output.
+    Returns:
+        A list of single item dictionaries of the form {key given in the index file: parsed/uncompressed string representation of the data}.
+    """
+    # Add a check to make sure names aren't duplicated.
+    bcv = bracket_contents.values()
+    bcs = set([x for x in bracket_contents.values()])
+    if len(bcs) != len(bcv):
+        dupes = [x for x in bcs if list(bcv).count(x) != 1]
+        raise AssertionError("Duplicate values in bracket_contents: " + ', '.join(dupes))
 
     idx_names = {
         1: "Group Start",
@@ -621,14 +629,14 @@ def parse_text(raw, pointers, groups, lookup, bracket, debug):
             if token_value in ('*', '[', '^', '@', '&') and (token_idx + 1) != len(entry):
                 token_idx += 1
                 bracket_arg = int(entry[token_idx])
-                if token_value in ('@', '^', '&'):
+                if token_value in ('*', '@', '^', '&'):
                     token_extra = token_value
                 else:
                     token_extra = ''
                 if bracket_arg in bracket.keys():
                     token_value = '{' + token_extra + bracket[bracket_arg].upper() + '}'
                 elif bracket_arg == 0x20:
-                    token_value = '& '  # the '&' character is used as an escape for certain tokens, so it has it's own sequence.
+                    token_value = '0x20'  # the '&' character is used as an escape for certain tokens, so it has it's own sequence.
                 else:
                     token_value = '{' + token_extra + hex(bracket_arg) + '}'
             parsed_chunk += token_value
@@ -674,6 +682,9 @@ def generate_output(grouped_tokens, group_names):
             ls += "token " + str(i) + ": " + e + "\n\n"
     return ls
 
+def output_as_json(grouped_tokens, group_names):
+    out = {group_names[k]: v for k, v in grouped_tokens.items()}
+    return json.dumps(out)
 
 if __name__ == "__main__":
     options = parse_command_line()
@@ -681,6 +692,7 @@ if __name__ == "__main__":
     input_path = options.input_file
     output_path = options.output_file
     debug = options.debug
+    output_path_json = options.json_file
     files = ["DATA_USA.DAT", "DATA_USA.IDX"]
 
     with open(input_path + files[0], 'rb') as f:
@@ -693,4 +705,10 @@ if __name__ == "__main__":
 
     output, names = parse_data_usa(raw_unparsed_data, raw_idx, debug)
     with open(output_path, 'w') as f:
+        print("output written to: ", str(output_path))
         f.write(generate_output(output, names))
+
+    if output_path_json:
+        with open(output_path_json, 'w') as f:
+            print("output written to: ", str(output_path_json))
+            f.write(output_as_json(output, names))
