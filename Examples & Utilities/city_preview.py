@@ -316,15 +316,11 @@ def create_network_layer(city, sprites):
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
         # Highways are weird and need to be handled specially, or they "float".
         # Todo: this still has a bug in it, because highways should be drawn in the buildings layer, probably.
-        # Ramps
-        if building_id == 97:
-            shift += 7
-        elif building_id in (98, 99):
+        # back side rampsRamps
+        if building_id in (98, 99):
             shift += 20
-        elif building_id == 100:
-            shift += 8
-        # Corners, Interchange, Reinforced Bridge
-        elif building_id in (100, 101, 102, 103, 104, 105, 106, 107):
+        # Corners, Interchange, Reinforced Bridge, front ramps
+        elif building_id in (97, 100, 101, 102, 103, 104, 105, 106, 107):
             shift += 8
         r, c = building.tile_coords
         i = (r * 16 - c * 16) + w_offset
