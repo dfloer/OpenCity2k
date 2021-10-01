@@ -20,6 +20,11 @@ layer_offset = -12
 def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=True, building_type="full"):
     """
     Creates an array of the tiles for terrain layer, optionally with groundcover (trees).
+
+    Notes on how highway drawing is handled, as a special case.
+    First, why? Highway tiles are the only 2x2 buildings that show the tiles underneath them. All the rest cover the underlying terrain up.
+    In create_network_layer(), when we have a 2x2 highway tile, we create an extra entry for the bottom tile, which will otherwise get over-written.
+    We then composite this tile *again* over-top of the terrain tile, after cropping it to just the area that shows up over the terrain tile.
     Args:
         city (City): city object to draw a terrain layer from.
         sprites (dict): id: Image dictionary of sprites to use.
@@ -39,7 +44,7 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
         groundcover_layer = create_groundcover_layer(city, sprites)
     network_layer = {}
     if networks:
-        network_layer = create_network_layer(city, sprites)
+        network_layer, highway_extra = create_network_layer(city, sprites)
     building_layer = {}
     if building_type != "none":
         building_layer = create_buildings(city, sprites)
@@ -77,6 +82,17 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             except AttributeError:
                 building_here = False
         if not building_here:
+            highway_lower = None
+            if k in highway_extra.keys():
+                source_key = highway_extra[k]
+                y2 = terrain_image.size[1]
+                highway_img = network_layer[source_key]["image"]
+                iy = highway_img.size[1]
+                c = (16, iy - y2, 48, iy)
+                highway_lower = highway_img.crop(c)
+            if highway_lower is not None:
+                terrain_image = terrain_image.copy()
+                terrain_image.paste(highway_lower, (0, 0), highway_lower)
             terrain_layer_image.paste(terrain_image, position, terrain_image)
             if k in zone_layer.keys():
                 zone = zone_layer[k]
@@ -286,14 +302,17 @@ def create_network_layer(city, sprites):
         sprites (dict): id: Image dictionary of sprites to use.
     Returns:
         Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
+        Dictionary of (row, col): (corner_row, corner_col) for extra highway tiles that need to be re-composited.
     """
     traffic_tiles = {29: 400, 30: 401, 31: 402, 32: 403, 33: 404, 34: 405, 35: 406, 36: 407, 37: 408, 38: 409, 39: 401,
                      40: 400, 41: 401, 42: 400, 43: 401, 67: 400, 68: 401, 69: 400, 70: 401, 73: 410, 74: 411, 75: 410,
                      76: 411, 77: 410, 78: 411, 79: 410, 80: 411, 93: 414, 94: 415, 95: 416, 96: 417, 97: 418, 98: 419,
                      99: 420, 100: 421, 101: 422, 102: 423, 103: 424, 104: 425, 105: 426}
     network_sprites = {}
+    highway_extra = {}
     for k in city.networks.keys():
         row, col = k
+        highway_special = False
         tile = city.tilelist[k]
         building = city.networks[k]
         altitude = city.tilelist[k].altitude
@@ -306,36 +325,31 @@ def create_network_layer(city, sprites):
         if building_id == 0:
             continue
         image = sprites[1000 + building_id].copy()
-
         extra = image.size[1] - 17
         shift = altitude * layer_offset
         if terrain == 0x0D:
             shift += layer_offset
         if building_id in traffic_tiles.keys():
-            traffic_image = get_traffic_image(tile, city.networks, sprites)
-            if traffic_image:
-                traffic_image_offset = image.size[1] - traffic_image.size[1]
-                # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
-                # There's probably a better way of doing this, but it works for now.
-                mask = Image.new('RGBA', (traffic_image.size), (0, 0, 0, 0))
-                w, h = traffic_image.size
-                for x in range(w):
-                    for y in range(h):
-                        p = traffic_image.getpixel((x, y))
-                        base_p = image.getpixel((x, y))
-                        # We only want to draw if we're a car (blue or black), but only on something road coloured.
-                        # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
-                        # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
-                        if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
-                            mask.putpixel((x, y), p)
-                image.paste(traffic_image, (0, traffic_image_offset), mask)
+            image = composite_traffic(tile, city, sprites, image)
         if rotate:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        # Highways are weird and need to be handled specially, or they "float".
+        # Todo: this still has a bug in it, because highways should be drawn in the buildings layer, probably.
+        # back side rampsRamps
+        if building_id in (98, 99):
+            shift += 20
+            highway_special = True
+        # Corners, Interchange, Reinforced Bridge, front ramps
+        elif building_id in (97, 100, 101, 102, 103, 104, 105, 106, 107):
+            shift += 8
+            highway_special = True
         r, c = building.tile_coords
         i = (r * 16 - c * 16) + w_offset
         j = (r * 8 + c * 8) + h_offset + shift - extra
         network_sprites[(r, c)] = {"pixel": (i, j), "image": image}
-    return network_sprites
+        if highway_special:
+            highway_extra[(r + 1, c)] = (r, c)
+    return network_sprites, highway_extra
 
 
 def get_traffic_image(tile, networks, sprites):
@@ -358,19 +372,73 @@ def get_traffic_image(tile, networks, sprites):
     hwy_threshold = [30, 58]
     road_threshold = [86, 172]
     building_id = networks[tile.coordinates].building_id
-    if building_id < 44:
+    # 88/89 are the causeway bridge and raised version pieces.
+    if building_id < 73 or building_id in (88, 89):
         threshold = road_threshold
     else:
         threshold = hwy_threshold
     if traffic < threshold[0]:
         return None
     elif traffic > threshold[1] and building_id not in (93, 94, 95, 96):
+        if building_id > 96:
+            heavy_offset -= 4
         tile_id = traffic_tiles[building_id] + heavy_offset + 1000
     else:
         tile_id = traffic_tiles[building_id] + 1000
+    # The straight highway tiles need to be handled differently, because there are two directions of travel for these.
+    coords = tile.coordinates
+    if building_id in (73, 74, 75, 76, 77, 78, 79, 80):
+        # Even tile IDs are top-left bottom-right, odd are top-right bottom-left.
+        if building_id % 2 == 1:
+            if coords[0] % 2 == 0:
+                tile_id == 410 if traffic < threshold[1] else 437
+            else:
+                tile_id == 411 if traffic < threshold[1] else 438
+        else:
+            if coords[1] % 2 == 0:
+                tile_id == 410 if traffic < threshold[1] else 437
+            else:
+                tile_id == 411 if traffic < threshold[1] else 438
     tile_image = sprites[tile_id]
-    if tile_id in (411, 438):
+    if building_id in (74, 76, 78, 80):
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
+    return tile_image
+
+def composite_traffic(tile, city, sprites, tile_image):
+    """
+    Handles compositing of the traffic tile onto the road exactly as the game does it.
+    This keeps traffic from drawing over power lines, but also means that it draws under crosswalks.
+    Args:
+        tile (Tile): Tile data to work with.
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        tile_image (Image): Road tile image to composite on top of.
+
+    Returns:
+        Image: Composited traffic tile image.
+    """
+    traffic_image = get_traffic_image(tile, city.networks, sprites)
+    if traffic_image:
+        traffic_image_offset = tile_image.size[1] - traffic_image.size[1]
+        # This extra mask generation step is so that traffic doesn't draw on top of power lines, railroad tracks and crosswalks.
+        # There's probably a better way of doing this, but it works for now.
+        mask = Image.new('RGBA', (traffic_image.size), (0, 0, 0, 0))
+        w, h = traffic_image.size
+        for x in range(w):
+            for y in range(h):
+                p = traffic_image.getpixel((x, y))
+                base_p = tile_image.getpixel((x, y + traffic_image_offset))
+                # We only want to draw if we're a car (blue or black), but only on something road coloured.
+                # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
+                # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
+                if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
+                    mask.putpixel((x, y), p)
+        # It doesn't look like anything but the straight highway pieces use the masking method.
+        # This can be seen on the ramps to the bridge, where the "railing" is over-ridden by the traffic in game.
+        if city.networks[tile.coordinates].building_id not in (97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107):
+            tile_image.paste(traffic_image, (0, traffic_image_offset), mask)
+        else:
+            tile_image.paste(traffic_image, (0, traffic_image_offset), traffic_image)
     return tile_image
 
 def create_things_layer(city, sprites):
