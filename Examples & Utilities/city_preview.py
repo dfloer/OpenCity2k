@@ -372,18 +372,35 @@ def get_traffic_image(tile, networks, sprites):
     hwy_threshold = [30, 58]
     road_threshold = [86, 172]
     building_id = networks[tile.coordinates].building_id
-    if building_id < 44:
+    # 88/89 are the causeway bridge and raised version pieces.
+    if building_id < 73 or building_id in (88, 89):
         threshold = road_threshold
     else:
         threshold = hwy_threshold
     if traffic < threshold[0]:
         return None
     elif traffic > threshold[1] and building_id not in (93, 94, 95, 96):
+        if building_id > 96:
+            heavy_offset -= 4
         tile_id = traffic_tiles[building_id] + heavy_offset + 1000
     else:
         tile_id = traffic_tiles[building_id] + 1000
+    # The straight highway tiles need to be handled differently, because there are two directions of travel for these.
+    coords = tile.coordinates
+    if building_id in (73, 74, 75, 76, 77, 78, 79, 80):
+        # Even tile IDs are top-left bottom-right, odd are top-right bottom-left.
+        if building_id % 2 == 1:
+            if coords[0] % 2 == 0:
+                tile_id == 410 if traffic < threshold[1] else 437
+            else:
+                tile_id == 411 if traffic < threshold[1] else 438
+        else:
+            if coords[1] % 2 == 0:
+                tile_id == 410 if traffic < threshold[1] else 437
+            else:
+                tile_id == 411 if traffic < threshold[1] else 438
     tile_image = sprites[tile_id]
-    if tile_id in (411, 438):
+    if building_id in (74, 76, 78, 80):
         tile_image = tile_image.transpose(Image.FLIP_LEFT_RIGHT)
     return tile_image
 
@@ -410,13 +427,18 @@ def composite_traffic(tile, city, sprites, tile_image):
         for x in range(w):
             for y in range(h):
                 p = traffic_image.getpixel((x, y))
-                base_p = tile_image.getpixel((x, y))
+                base_p = tile_image.getpixel((x, y + traffic_image_offset))
                 # We only want to draw if we're a car (blue or black), but only on something road coloured.
                 # Yes, this means that the cars draw *under* the crosswalk and traintracks, but it's this was in the original game.
                 # Possible tweak here is to only not draw when base_p is not (0, 0, 0, 255) (black).
                 if p != (140, 140, 140, 255) and base_p == (143, 143, 143, 255):
                     mask.putpixel((x, y), p)
-        tile_image.paste(traffic_image, (0, traffic_image_offset), mask)
+        # It doesn't look like anything but the straight highway pieces use the masking method.
+        # This can be seen on the ramps to the bridge, where the "railing" is over-ridden by the traffic in game.
+        if city.networks[tile.coordinates].building_id not in (97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107):
+            tile_image.paste(traffic_image, (0, traffic_image_offset), mask)
+        else:
+            tile_image.paste(traffic_image, (0, traffic_image_offset), traffic_image)
     return tile_image
 
 def create_things_layer(city, sprites):
