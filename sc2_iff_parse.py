@@ -270,7 +270,7 @@ def chunk_input_serial(input_file, input_type='sc2'):
     """
     output_dict = collections.OrderedDict()
     try:
-        header, infile = check_file(input_file, input_type)
+        header, input_file = check_file(input_file, input_type)
     except SC2Parse:
         raise
     file_length = header['data_size']
