@@ -75,7 +75,7 @@ def check_file(input_data, input_type):
                 error_message = f"Not a FORM type IFF file, claiming: {header}"
             raise SC2Parse(error_message)
         if reported_size != actual_size:
-            error_message = "File reports being: {reported_size}B, but is actually {actual_size}B long."
+            error_message = f"File reports being: {reported_size}B, but is actually {actual_size}B long."
             raise SC2Parse(error_message)
         if file_type != b"SCDH":
             error_message = f"File type is not SCDH, claiming: {file_type}"
@@ -88,7 +88,7 @@ def check_file(input_data, input_type):
             error_message = f"File reports being: {reported_size}B, but is actually {actual_size}B long."
             raise MIFFParse(error_message)
         if file_type != b"SC2K":
-            error_message = "File type is not SC2K, claiming: {file_type}"
+            error_message = f"File type is not SC2K, claiming: {file_type}"
             raise MIFFParse(error_message)
     return {'type_id': header, 'data_size': reported_size, 'file_type': file_type, "city_name": city_name}, input_data
 
