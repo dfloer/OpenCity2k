@@ -10,9 +10,9 @@ from Data.buildings import get_size as get_building_size
 
 
 # Some important tile rendering constants.
-width = 32 * 128 + 1000
-height = 16 * 128 + 1000
-w_offset = width // 2
+image_width = 32 * 128 + 1000
+image_height = 16 * 128 + 1000
+w_offset = image_width // 2
 h_offset = 500
 layer_offset = -12
 
@@ -50,7 +50,7 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
         building_layer = create_buildings(city, sprites)
     things_layer = create_things_layer(city, sprites)
     disaster_layer = create_disaster_layer(city, sprites)
-    terrain_layer_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    terrain_layer_image = Image.new('RGBA', (image_width, image_height), (0, 0, 0, 0))
     tilelist = city.tilelist
 
     # This is the order to render all of the tiles in. It still needs tweaking to get correct.
@@ -674,7 +674,7 @@ def draw_edge(city, sprites, position):
     return {position: {"pixel": (a, b), "image": image}}
 
 
-def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False):
+def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False, crop_image=False):
     """
     Creates a PNG preview of the given city file
     Args:
@@ -683,6 +683,7 @@ def render_city_image(input_sc2_path, output_path, sprites_path, city=False, tra
         sprites_path (str): path to the sprites directory to use to draw the city.
         city (City): city object to render.
         transprent_bg (bool): Whether or not to have a transparent background or not.
+        crop_image (bool, optional): Whether or not to crop the resulting image. Defaults to False.
     Returns:
         Nothing, but saves a PNG file to disk.
     """
@@ -690,12 +691,22 @@ def render_city_image(input_sc2_path, output_path, sprites_path, city=False, tra
         city = sc2p.City()
         city.create_city_from_file(input_sc2_path)
     sprites = load_sprites(sprites_path)
+
+
+    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full")
+    width = image_width
+    height = image_height
+
+    if crop_image:
+        final_size = terrain_layer.getbbox()
+        width = final_size[2] - final_size[0]
+        height = final_size[3] - final_size[1]
+        terrain_layer = terrain_layer.crop(final_size)
+
     if not transprent_bg:
         background = Image.new('RGBA', (width, height), (55, 23, 0, 255))
     else:
         background = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-
-    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full")
 
     background.paste(terrain_layer, (0, 0), terrain_layer)
 
@@ -753,6 +764,7 @@ def parse_command_line():
     parser.add_argument('-o', '--output', dest="output_file", help="output image filename", metavar="FILE", required=True)
     parser.add_argument('-s', '--sprites', dest="sprites_dir", help="directory containing sprites", metavar="FILE", required=True)
     parser.add_argument('-t', '--transparent', dest="transparent_bg", help="make image background tranparent", required=False, action="store_true", default=False)
+    parser.add_argument('-c', '--crop', dest="crop_image", help="crop the image to the minimal size", required=False, action="store_true", default=False)
     args = parser.parse_args()
     return args
 
@@ -764,4 +776,5 @@ if __name__ == "__main__":
     output_file = options.output_file
     image_location = options.sprites_dir
     transparent_bg = options.transparent_bg
-    render_city_image(input_file, output_file, image_location, None, transparent_bg)
+    crop_image = options.crop_image
+    render_city_image(input_file, output_file, image_location, None, transparent_bg, crop_image)
