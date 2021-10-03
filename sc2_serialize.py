@@ -152,7 +152,7 @@ def serialize_misc(city):
             output_bytes[offset: offset + len(data)] = data
         elif v == 'Tile Counts':
             for building_count in city.building_count.values():
-                data = serialize_uint32(building_count)
+                data = serialize_int32(building_count)
                 output_bytes[offset : offset + 4] = data
                 offset += 4
         elif v == 'Bonds':
@@ -164,7 +164,7 @@ def serialize_misc(city):
         elif v == 'Neighbours':
             for n in city.neighbor_info.values():
                 for e in n.values():
-                    data = serialize_uint32(e)
+                    data = serialize_int32(e)
                     output_bytes[offset: offset + 4] = data
                     offset += 4
         elif v == 'Budget':
@@ -173,34 +173,34 @@ def serialize_misc(city):
         elif v == 'Military Count':
             num_items = 16
             for x in range(num_items):
-                data = serialize_uint32(city.city_attributes[f"Military Count|{x}"])
+                data = serialize_int32(city.city_attributes[f"Military Count|{x}"])
                 output_bytes[offset: offset + 4] = data
                 offset += 4
         elif v == 'Paper List':
             num_items = 6 * 5
             for x in range(num_items):
-                data = serialize_uint32(city.city_attributes[f"Paper List|{x}"])
+                data = serialize_int32(city.city_attributes[f"Paper List|{x}"])
                 output_bytes[offset: offset + 4] = data
                 offset += 4
         elif v == 'News List':
             num_items = 9 * 6
             for x in range(num_items):
-                data = serialize_uint32(city.city_attributes[f"News List|{x}"])
+                data = serialize_int32(city.city_attributes[f"News List|{x}"])
                 output_bytes[offset: offset + 4] = data
                 offset += 4
         elif v == 'Extra':
             for x in range(156):
-                data = serialize_uint32(city.city_attributes[f"Extra|{x}"])
+                data = serialize_int32(city.city_attributes[f"Extra|{x}"])
                 output_bytes[offset: offset + 4] = data
                 offset += 4
         elif v in list(city.simulator_settings.keys()):
-            data = serialize_uint32(city.simulator_settings[v])
+            data = serialize_int32(city.simulator_settings[v])
             output_bytes[offset: offset + 4] = data
         elif v in list(city.game_settings.keys()):
-            data = serialize_uint32(city.game_settings[v])
+            data = serialize_int32(city.game_settings[v])
             output_bytes[offset: offset + 4] = data
         elif v in list(city.inventions.keys()):
-            data = serialize_uint32(city.inventions[v])
+            data = serialize_int32(city.inventions[v])
             output_bytes[offset: offset + 4] = data
         else:
             # Fallthrough, this should never, ever, be hit.

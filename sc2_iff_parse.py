@@ -2,7 +2,7 @@
 
 import collections
 import itertools
-from utils import open_file, write_file_contents, get_padded_bytes, parse_int32, parse_uint32
+from utils import open_file, parse_uint8, write_file_contents, get_padded_bytes, parse_int32, parse_uint32
 
 SC2_SIZE_DICT = collections.OrderedDict((('CNAM', 32), ('MISC', 4800), ('ALTM', 32768), ('XTER', 16384), ('XBLD', 16384),
         ('XZON', 16384), ('XUND', 16384), ('XTXT', 16384), ('XLAB', 6400), ('XMIC', 1200),
@@ -54,8 +54,9 @@ def check_file(input_data, input_type):
         MIFFParse: an error relating to parsing .mif files. Could be caused by file corruption of not actually being a tileset file.
     """
     # Check and convert if this is a Mac city file.
+    city_name = None
     if mac_check(input_data):
-        input_data = mac_fix(input_data)
+        input_data, city_name = mac_fix(input_data)
     # This should be "FORM" for .sc2
     header = input_data[0 : 4]
     # The reported size saved in the .sc2, we don't count the first 8 bytes though, so we need to add them back.
@@ -74,7 +75,7 @@ def check_file(input_data, input_type):
                 error_message = f"Not a FORM type IFF file, claiming: {header}"
             raise SC2Parse(error_message)
         if reported_size != actual_size:
-            error_message = "File reports being: {reported_size}B, but is actually {actual_size}B long."
+            error_message = f"File reports being: {reported_size}B, but is actually {actual_size}B long."
             raise SC2Parse(error_message)
         if file_type != b"SCDH":
             error_message = f"File type is not SCDH, claiming: {file_type}"
@@ -87,9 +88,9 @@ def check_file(input_data, input_type):
             error_message = f"File reports being: {reported_size}B, but is actually {actual_size}B long."
             raise MIFFParse(error_message)
         if file_type != b"SC2K":
-            error_message = "File type is not SC2K, claiming: {file_type}"
+            error_message = f"File type is not SC2K, claiming: {file_type}"
             raise MIFFParse(error_message)
-    return {'type_id': header, 'data_size': reported_size, 'file_type': file_type}, input_data
+    return {'type_id': header, 'data_size': reported_size, 'file_type': file_type, "city_name": city_name}, input_data
 
 
 def mac_check(input_data):
@@ -115,10 +116,12 @@ def mac_fix(input_data):
     Args:
         input_data (bytes): raw city information.
     Returns:
-        Bytes comprising a compatible SC2k Win95 city file from the Mac file.
+        Bytes comprising a compatible SC2k Win95 city file from the Mac file, and the name of the city from the start of the file.
     """
     reported_size = parse_int32(input_data[0x84 : 0x88]) + 8
-    return input_data[0x80 : 0x80 + reported_size]
+    name_len = input_data[1]
+    city_name = input_data[1 : 2 + name_len]
+    return input_data[0x80 : 0x80 + reported_size], city_name
 
 
 # Functions to handle chunking up the IFF file.
@@ -270,13 +273,14 @@ def chunk_input_serial(input_file, input_type='sc2'):
     """
     output_dict = collections.OrderedDict()
     try:
-        header, infile = check_file(input_file, input_type)
+        header, input_file = check_file(input_file, input_type)
     except SC2Parse:
         raise
     file_length = header['data_size']
     # -12B for the header
     remaining_length = file_length - 12
-
+    if "CNAM" not in output_dict and header["city_name"] is not None:
+        output_dict["CNAM"] = header["city_name"]
     while remaining_length > 0:
         offset = file_length - remaining_length
         chunk = get_chunk_from_offset(input_file, offset)
