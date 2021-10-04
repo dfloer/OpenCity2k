@@ -1773,4 +1773,4 @@ def get_name(building_id):
     return tile_data[building_id]["name"]
 
 # Tiles that can have a train sprite drawn on them:
-train_tiles = [x for x in tile_data if "Rail" in x["name"]]
+train_tiles = [k for k, v in tile_data.items() if "Rail" in v["name"]]

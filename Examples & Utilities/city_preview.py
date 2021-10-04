@@ -457,10 +457,10 @@ def create_things_layer(city, sprites):
         thing_idx, thing_data = t
         thing_id = thing_data.thing_id
         thing_location = (thing_data.x, thing_data.y)
-
         if thing_data.x > 127 or thing_data.y > 127:
             continue
-
+        # thing_offset = 0
+        # thing_horiz_offset = 0
         # txt = city.tilelist[thing_location].text_pointer
         # print(f"{thing_idx}: {str(thing_data)}, txt: {txt}.")
         tile_w_offset = 0
@@ -504,13 +504,66 @@ def create_things_layer(city, sprites):
                 thing_image = sprites[1381]
         # train
         elif thing_id in (10, 11, 12, 13):
+            building_id = city.tilelist[thing_location].building.building_id
+            print(thing_id, thing_data, building_id)
             # Only draw train when it is on train tracks.
-            if city.tilelist[thing_location].building_id not in train_tiles:
+            if building_id not in train_tiles:
                 continue
-            if thing_data.rotation_1 == 0:
+            # Just gonna ignore the rotations here and do it based off of the underlying tile.
+            # Should eventually reverse engineer it, but it doesn't quite make sense yet.
+            # top-right/bottom left straight pieces, T's, +
+            if building_id in (44, 55, 57, 58, 71, 78):
                 thing_image = sprites[1374]
-            else:  # todo: handle diagonal rotations.
+            # top-left/bottom-right straight pieces, T's
+            elif building_id in (45, 54, 56, 72, 77):
+                thing_image = sprites[1374]
+                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+            # bridge pieces.
+            elif building_id in (90, 91):
+                thing_image = sprites[1374]
+                # Bridge pieces only come in one direction and can be rotated.
+                if city.tilelist[thing_location].bit_flags.rotate:
+                    thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+            # top-bottom right
+            elif building_id == 50:
+                thing_image = sprites[1376].copy()
+                thing_image = thing_image.transpose(Image.FLIP_LEFT_RIGHT)
+                tile_w_offset = -1
+            # top-bottom left
+            elif building_id == 52:
+                thing_image = sprites[1376]
+            # left-right lower
+            elif building_id == 51:
+                thing_image = sprites[1375]
+                tile_h_offset = 8
+            # left-right upper
+            elif building_id == 53:
+                thing_image = sprites[1375]
+            # upper slopes
+            elif building_id == 46:
+                thing_image = sprites[1377]
+                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+            elif building_id == 47:
+                thing_image = sprites[1377]
+            elif building_id == 48:
                 thing_image = sprites[1378]
+            elif building_id == 49:
+                thing_image = sprites[1378]
+                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+            # lower slopes
+            elif building_id == 59:
+                thing_image = sprites[1377]
+            elif building_id == 60:
+                thing_image = sprites[1377]
+                tile_h_offset = 8
+                # thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+            elif building_id == 61:
+                tile_h_offset = 6
+                thing_image = sprites[1378]
+            elif building_id == 62:
+                thing_image = sprites[1378]
+                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+                tile_h_offset = 6
         elif thing_id == 14:  # military deploy
             thing_image = sprites[1384]
         elif thing_id == 15:  # tornado
