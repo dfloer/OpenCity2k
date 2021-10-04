@@ -370,8 +370,8 @@ def get_traffic_image(tile, networks, sprites):
     traffic = tile.traffic
     heavy_offset = 27  # offset from the start that the heavy version of the traffic sprite is used.
     # Traffic threshold values. These should probably be moved to a data file or something as they're a mechanic and not part of this renderer.
-    hwy_threshold = [30, 58]
-    road_threshold = [86, 172]
+    hwy_threshold = [28, 56]
+    road_threshold = [85, 170]
     building_id = networks[tile.coordinates].building_id
     # 88/89 are the causeway bridge and raised version pieces.
     if building_id < 73 or building_id in (88, 89):
