@@ -7,6 +7,7 @@ import random
 sys.path.append('..')
 import sc2_parse as sc2p
 from Data.buildings import get_size as get_building_size
+from Data.buildings import train_tiles
 
 
 # Some important tile rendering constants.
@@ -501,7 +502,11 @@ def create_things_layer(city, sprites):
                 thing_image = sprites[1379]
             else:
                 thing_image = sprites[1381]
-        elif thing_id in (10, 11):
+        # train
+        elif thing_id in (10, 11, 12, 13):
+            # Only draw train when it is on train tracks.
+            if city.tilelist[thing_location].building_id not in train_tiles:
+                continue
             if thing_data.rotation_1 == 0:
                 thing_image = sprites[1374]
             else:  # todo: handle diagonal rotations.

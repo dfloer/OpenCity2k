@@ -21,14 +21,14 @@ Tile attributes:
     abandoned: Whether or not this tils represents an abandoned building. Handled differently if it is.
     power_generated: Does this tile generate power? Amount of power generated will be stored elsewhere to account for power plants that generate variable amounts of power. See Wind and Solar.
     power_reported: Nominally, how much does this building supposedly produce (in MW). As reported in game.
-    water_produced: Does this building produce water? Amount stored in separate data structure. 
+    water_produced: Does this building produce water? Amount stored in separate data structure.
     cost: How much does it cost to plop this tile?
     maintenance: How much does this building cost /year at 100% funding?
     underground: What underground tile id should this tile have?
         Note that if water = True, this is assumed to be the normal small pipes. Otherwise, use the special tile.
     microsim: What microsim applies to this tile (if any?)
         Possible Values: city_hall, hospital, police, fire, museum, park, school, stadium, prison, college, zoo, statue, library, bus, rail, wind, hydro, marina, subway, plymouth, forest, darco, launch, dome, mansion.
-      
+
 """
 tile_data = {
     # Ground Cover
@@ -1771,3 +1771,6 @@ def get_name(building_id):
         String containing the building's name.
     """
     return tile_data[building_id]["name"]
+
+# Tiles that can have a train sprite drawn on them:
+train_tiles = [x for x in tile_data if "Rail" in x["name"]]
