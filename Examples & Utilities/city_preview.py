@@ -342,7 +342,11 @@ def create_network_layer(city, sprites):
             highway_special = True
         # Corners, Interchange, Reinforced Bridge, front ramps
         elif building_id in (97, 100, 101, 102, 103, 104, 105, 106, 107):
-            shift += 8
+            # This is a workaround for a bug in the game. There's an off-by-one error somewhere in the game code, which means that this highway tile is misplaced in the save.
+            if k[0] == 126 and tile.terrain == 0b1101:
+                shift += 20
+            else:
+                shift += 8
             highway_special = True
         r, c = building.tile_coords
         i = (r * 16 - c * 16) + w_offset
