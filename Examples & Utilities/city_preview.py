@@ -506,7 +506,11 @@ def create_things_layer(city, sprites):
                 thing_image = sprites[1381]
         # train
         elif thing_id in (10, 11, 12, 13):
-            building_id = city.tilelist[thing_location].building.building_id
+            try:
+                building_id = city.tilelist[thing_location].building.building_id
+            # Also check the network layer, this is probably only for highway tiles.
+            except AttributeError:
+                building_id = city.networks[thing_location].building_id
             # Only draw train when it is on train tracks.
             if building_id not in train_tiles:
                 continue
@@ -548,10 +552,10 @@ def get_train_tile(building_id, city, sprites, thing_location):
     tile_h_offset = 0
     tile_w_offset = 0
     # top-right/bottom left straight pieces, T's, + (cross)
-    if building_id in (44, 55, 57, 58, 71, 78):
+    if building_id in (44, 55, 57, 58, 70, 71, 78):
         thing_image = sprites[1374]
     # top-left/bottom-right straight pieces, T's
-    elif building_id in (45, 54, 56, 72, 77):
+    elif building_id in (45, 54, 56, 69, 72, 77):
         thing_image = sprites[1374]
         thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
     # bridge pieces.
