@@ -459,13 +459,10 @@ def create_things_layer(city, sprites):
         thing_location = (thing_data.x, thing_data.y)
         if thing_data.x > 127 or thing_data.y > 127:
             continue
-        # thing_offset = 0
-        # thing_horiz_offset = 0
         # txt = city.tilelist[thing_location].text_pointer
         # print(f"{thing_idx}: {str(thing_data)}, txt: {txt}.")
         tile_w_offset = 0
         tile_h_offset = 0
-
         if thing_id == 0:  # Appears to be null, so don't draw anything
             continue
         elif thing_id == 1:  # Airplane
@@ -480,16 +477,17 @@ def create_things_layer(city, sprites):
             tile_h_offset = copter_alt * layer_offset
         elif thing_id == 3:  # Ship
             thing_image = sprites[1372]
-        elif thing_id == 4:  # Unknown
-            thing_image = sprites[1300]
+        elif thing_id == 4:  # Unknown, but it doesn't appear to actually draw in game.
+            continue
+            # thing_image = sprites[1300]
         elif thing_id == 5:  # Monster.
             thing_image = draw_monster(sprites)
             # Monster needs special handling because it's so big. This also isn't quite pixel perfect.
             # Todo: monsters have a shadow, but only on the base terrain layer, so water or land, not on buildings.
             tile_w_offset = -128
             tile_h_offset = -int(5.5 * layer_offset)
-        elif thing_id == 6:  # Unknown
-            thing_image = sprites[1300]
+        elif thing_id == 6:  # explosion
+            thing_image = sprites[1387]
         elif thing_id == 7:  # police deploy
             thing_image = sprites[1382]
         elif thing_id == 8:  # fire deploy
@@ -505,7 +503,6 @@ def create_things_layer(city, sprites):
         # train
         elif thing_id in (10, 11, 12, 13):
             building_id = city.tilelist[thing_location].building.building_id
-            print(thing_id, thing_data, building_id)
             # Only draw train when it is on train tracks.
             if building_id not in train_tiles:
                 continue
@@ -522,6 +519,7 @@ def create_things_layer(city, sprites):
             elif building_id in (90, 91):
                 thing_image = sprites[1374]
                 # Bridge pieces only come in one direction and can be rotated.
+                tile_h_offset = -13
                 if city.tilelist[thing_location].bit_flags.rotate:
                     thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
             # top-bottom right
@@ -553,6 +551,8 @@ def create_things_layer(city, sprites):
             # lower slopes
             elif building_id == 59:
                 thing_image = sprites[1377]
+                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+                tile_h_offset = 8
             elif building_id == 60:
                 thing_image = sprites[1377]
                 tile_h_offset = 8
