@@ -510,7 +510,13 @@ def create_things_layer(city, sprites):
                 building_id = city.tilelist[thing_location].building.building_id
             # Also check the network layer, this is probably only for highway tiles.
             except AttributeError:
-                building_id = city.networks[thing_location].building_id
+                try:
+                    building_id = city.networks[thing_location].building_id
+                # If thing_id is 12 or 13, this usually means it's in a subway tunnel.
+                # But in at least one city, it meant surface trains.
+                # So if there really isn't a building here, don't render a train.
+                except KeyError:
+                    continue
             # Only draw train when it is on train tracks.
             if building_id not in train_tiles:
                 continue
@@ -607,6 +613,8 @@ def get_train_tile(building_id, city, sprites, thing_location):
         thing_image = sprites[1378]
         thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
         tile_h_offset = 6
+    else:
+        print(building_id)
     return thing_image, tile_h_offset, tile_w_offset
 
 
