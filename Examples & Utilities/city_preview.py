@@ -510,64 +510,7 @@ def create_things_layer(city, sprites):
             # Only draw train when it is on train tracks.
             if building_id not in train_tiles:
                 continue
-            # Just gonna ignore the rotations here and do it based off of the underlying tile.
-            # Should eventually reverse engineer it, but it doesn't quite make sense yet.
-            # top-right/bottom left straight pieces, T's, +
-            if building_id in (44, 55, 57, 58, 71, 78):
-                thing_image = sprites[1374]
-            # top-left/bottom-right straight pieces, T's
-            elif building_id in (45, 54, 56, 72, 77):
-                thing_image = sprites[1374]
-                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-            # bridge pieces.
-            elif building_id in (90, 91):
-                thing_image = sprites[1374]
-                # Bridge pieces only come in one direction and can be rotated.
-                tile_h_offset = -13
-                if city.tilelist[thing_location].bit_flags.rotate:
-                    thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-            # top-bottom right
-            elif building_id == 50:
-                thing_image = sprites[1376].copy()
-                thing_image = thing_image.transpose(Image.FLIP_LEFT_RIGHT)
-                tile_w_offset = -1
-            # top-bottom left
-            elif building_id == 52:
-                thing_image = sprites[1376]
-            # left-right lower
-            elif building_id == 51:
-                thing_image = sprites[1375]
-                tile_h_offset = 8
-            # left-right upper
-            elif building_id == 53:
-                thing_image = sprites[1375]
-            # upper slopes
-            elif building_id == 46:
-                thing_image = sprites[1377]
-                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-            elif building_id == 47:
-                thing_image = sprites[1377]
-            elif building_id == 48:
-                thing_image = sprites[1378]
-            elif building_id == 49:
-                thing_image = sprites[1378]
-                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-            # lower slopes
-            elif building_id == 59:
-                thing_image = sprites[1377]
-                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-                tile_h_offset = 8
-            elif building_id == 60:
-                thing_image = sprites[1377]
-                tile_h_offset = 8
-                # thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-            elif building_id == 61:
-                tile_h_offset = 6
-                thing_image = sprites[1378]
-            elif building_id == 62:
-                thing_image = sprites[1378]
-                thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
-                tile_h_offset = 6
+            thing_image, tile_h_offset, tile_w_offset = get_train_tile(building_id, city, sprites, thing_location)
         elif thing_id == 14:  # military deploy
             thing_image = sprites[1384]
         elif thing_id == 15:  # tornado
@@ -588,6 +531,79 @@ def create_things_layer(city, sprites):
 
         thing_sprites[(row, col)] = {"pixel": (i, j), "image": thing_image}
     return thing_sprites
+
+def get_train_tile(building_id, city, sprites, thing_location):
+    """
+    Gets the train tile for a given track tile.
+    Just gonna ignore the rotations here and do it based off of the underlying tile.
+    Should eventually reverse engineer it, but it doesn't quite make sense yet.
+    Args:
+        building_id (int): id of the builiding
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        thing_location (tuple): (int, int) coordinates of the tile.
+    Returns:
+        Image, int, int: Image for the tile along with the height and width offset, in that order.
+    """
+    tile_h_offset = 0
+    tile_w_offset = 0
+    # top-right/bottom left straight pieces, T's, + (cross)
+    if building_id in (44, 55, 57, 58, 71, 78):
+        thing_image = sprites[1374]
+    # top-left/bottom-right straight pieces, T's
+    elif building_id in (45, 54, 56, 72, 77):
+        thing_image = sprites[1374]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # bridge pieces.
+    elif building_id in (90, 91):
+        thing_image = sprites[1374]
+        # Bridge pieces only come in one direction and can be rotated.
+        tile_h_offset = -13
+        if city.tilelist[thing_location].bit_flags.rotate:
+            thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # top-bottom right
+    elif building_id == 50:
+        thing_image = sprites[1376].copy()
+        thing_image = thing_image.transpose(Image.FLIP_LEFT_RIGHT)
+        tile_w_offset = -1
+    # top-bottom left
+    elif building_id == 52:
+        thing_image = sprites[1376]
+    # left-right lower
+    elif building_id == 51:
+        thing_image = sprites[1375]
+        tile_h_offset = 8
+    # left-right upper
+    elif building_id == 53:
+        thing_image = sprites[1375]
+    # upper slopes
+    elif building_id == 46:
+        thing_image = sprites[1377]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    elif building_id == 47:
+        thing_image = sprites[1377]
+    elif building_id == 48:
+        thing_image = sprites[1378]
+    elif building_id == 49:
+        thing_image = sprites[1378]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # lower slopes
+    elif building_id == 59:
+        thing_image = sprites[1377]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+        tile_h_offset = 8
+    elif building_id == 60:
+        thing_image = sprites[1377]
+        tile_h_offset = 8
+        # thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    elif building_id == 61:
+        tile_h_offset = 6
+        thing_image = sprites[1378]
+    elif building_id == 62:
+        thing_image = sprites[1378]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+        tile_h_offset = 6
+    return thing_image, tile_h_offset, tile_w_offset
 
 
 def draw_monster(sprites):
