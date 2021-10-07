@@ -1,4 +1,3 @@
-from collections import namedtuple
 from PIL import Image
 from utils import parse_uint16, parse_uint32
 from os import path
@@ -129,26 +128,23 @@ def parse_palette(pallet_filename):
     """
     Generates a palette from the SC2k (win95 at least) version.
     Tested with PAL_MSTR.BMP, but it should work for the others.
-    At some point, it'd be nice if they could return a dict of id: {r, g, b) instead.
+    Note that the palette is stored within the bitmap image.
     Args:
         pallet_filename (path): path to the pallet file to open.
     Returns:
         Pillow image array containing the pallet.
     """
     image = Image.open(pallet_filename)
-    img_rgb = image.convert('RGB')
-    img_array = [[-1 for _ in range(16)] for x in range(16)]
-    palette_start_line = 17
-    palette_start_col = 2
-    swatch_width = 6
-    swatch_height = 5
-
+    palette_data = image.palette.getdata()
+    assert palette_data[0] == "BGRX"
+    pixel_data = palette_data[1]
+    colour_data = [tuple(a for a in pixel_data[x : x + 3]) for x in range(0, 1024, 4)]
+    cd = img_array = [[-1 for _ in range(16)] for _ in range(16)]
     for x in range(16):
         for y in range(16):
-            pix_x = palette_start_line + (x * swatch_height)
-            pix_y = palette_start_col + (y * swatch_width)
-            pixel_colour = img_rgb.getpixel((pix_y, pix_x))
-            img_array[y][x] = pixel_colour
+            pix = colour_data[y * 16 + x]
+            # Palette is in BGRX format. We dropped the X previously, but now we need to remap to the expected RGB.
+            cd[x][y] = (pix[2], pix[1], pix[0])
     return img_array
 
 

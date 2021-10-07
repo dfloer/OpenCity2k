@@ -7,12 +7,13 @@ import random
 sys.path.append('..')
 import sc2_parse as sc2p
 from Data.buildings import get_size as get_building_size
+from Data.buildings import train_tiles
 
 
 # Some important tile rendering constants.
-width = 32 * 128 + 1000
-height = 16 * 128 + 1000
-w_offset = width // 2
+image_width = 32 * 128 + 1000
+image_height = 16 * 128 + 1000
+w_offset = image_width // 2
 h_offset = 500
 layer_offset = -12
 
@@ -50,7 +51,7 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
         building_layer = create_buildings(city, sprites)
     things_layer = create_things_layer(city, sprites)
     disaster_layer = create_disaster_layer(city, sprites)
-    terrain_layer_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    terrain_layer_image = Image.new('RGBA', (image_width, image_height), (0, 0, 0, 0))
     tilelist = city.tilelist
 
     # This is the order to render all of the tiles in. It still needs tweaking to get correct.
@@ -341,7 +342,11 @@ def create_network_layer(city, sprites):
             highway_special = True
         # Corners, Interchange, Reinforced Bridge, front ramps
         elif building_id in (97, 100, 101, 102, 103, 104, 105, 106, 107):
-            shift += 8
+            # This is a workaround for a bug in the game. There's an off-by-one error somewhere in the game code, which means that this highway tile is misplaced in the save.
+            if k[0] == 126 and tile.terrain == 0b1101:
+                shift += 20
+            else:
+                shift += 8
             highway_special = True
         r, c = building.tile_coords
         i = (r * 16 - c * 16) + w_offset
@@ -369,8 +374,8 @@ def get_traffic_image(tile, networks, sprites):
     traffic = tile.traffic
     heavy_offset = 27  # offset from the start that the heavy version of the traffic sprite is used.
     # Traffic threshold values. These should probably be moved to a data file or something as they're a mechanic and not part of this renderer.
-    hwy_threshold = [30, 58]
-    road_threshold = [86, 172]
+    hwy_threshold = [28, 56]
+    road_threshold = [85, 170]
     building_id = networks[tile.coordinates].building_id
     # 88/89 are the causeway bridge and raised version pieces.
     if building_id < 73 or building_id in (88, 89):
@@ -456,15 +461,12 @@ def create_things_layer(city, sprites):
         thing_idx, thing_data = t
         thing_id = thing_data.thing_id
         thing_location = (thing_data.x, thing_data.y)
-
         if thing_data.x > 127 or thing_data.y > 127:
             continue
-
         # txt = city.tilelist[thing_location].text_pointer
         # print(f"{thing_idx}: {str(thing_data)}, txt: {txt}.")
         tile_w_offset = 0
         tile_h_offset = 0
-
         if thing_id == 0:  # Appears to be null, so don't draw anything
             continue
         elif thing_id == 1:  # Airplane
@@ -479,16 +481,17 @@ def create_things_layer(city, sprites):
             tile_h_offset = copter_alt * layer_offset
         elif thing_id == 3:  # Ship
             thing_image = sprites[1372]
-        elif thing_id == 4:  # Unknown
-            thing_image = sprites[1300]
+        elif thing_id == 4:  # Unknown, but it doesn't appear to actually draw in game.
+            continue
+            # thing_image = sprites[1300]
         elif thing_id == 5:  # Monster.
             thing_image = draw_monster(sprites)
             # Monster needs special handling because it's so big. This also isn't quite pixel perfect.
             # Todo: monsters have a shadow, but only on the base terrain layer, so water or land, not on buildings.
             tile_w_offset = -128
             tile_h_offset = -int(5.5 * layer_offset)
-        elif thing_id == 6:  # Unknown
-            thing_image = sprites[1300]
+        elif thing_id == 6:  # explosion
+            thing_image = sprites[1387]
         elif thing_id == 7:  # police deploy
             thing_image = sprites[1382]
         elif thing_id == 8:  # fire deploy
@@ -501,11 +504,23 @@ def create_things_layer(city, sprites):
                 thing_image = sprites[1379]
             else:
                 thing_image = sprites[1381]
-        elif thing_id in (10, 11):
-            if thing_data.rotation_1 == 0:
-                thing_image = sprites[1374]
-            else:  # todo: handle diagonal rotations.
-                thing_image = sprites[1378]
+        # train
+        elif thing_id in (10, 11, 12, 13):
+            try:
+                building_id = city.tilelist[thing_location].building.building_id
+            # Also check the network layer, this is probably only for highway tiles.
+            except AttributeError:
+                try:
+                    building_id = city.networks[thing_location].building_id
+                # If thing_id is 12 or 13, this usually means it's in a subway tunnel.
+                # But in at least one city, it meant surface trains.
+                # So if there really isn't a building here, don't render a train.
+                except KeyError:
+                    continue
+            # Only draw train when it is on train tracks.
+            if building_id not in train_tiles:
+                continue
+            thing_image, tile_h_offset, tile_w_offset = get_train_tile(building_id, city, sprites, thing_location)
         elif thing_id == 14:  # military deploy
             thing_image = sprites[1384]
         elif thing_id == 15:  # tornado
@@ -526,6 +541,81 @@ def create_things_layer(city, sprites):
 
         thing_sprites[(row, col)] = {"pixel": (i, j), "image": thing_image}
     return thing_sprites
+
+def get_train_tile(building_id, city, sprites, thing_location):
+    """
+    Gets the train tile for a given track tile.
+    Just gonna ignore the rotations here and do it based off of the underlying tile.
+    Should eventually reverse engineer it, but it doesn't quite make sense yet.
+    Args:
+        building_id (int): id of the builiding
+        city (City): city object to draw a terrain layer from.
+        sprites (dict): id: Image dictionary of sprites to use.
+        thing_location (tuple): (int, int) coordinates of the tile.
+    Returns:
+        Image, int, int: Image for the tile along with the height and width offset, in that order.
+    """
+    tile_h_offset = 0
+    tile_w_offset = 0
+    # top-right/bottom left straight pieces, T's, + (cross)
+    if building_id in (44, 55, 57, 58, 70, 71, 78):
+        thing_image = sprites[1374]
+    # top-left/bottom-right straight pieces, T's
+    elif building_id in (45, 54, 56, 69, 72, 77):
+        thing_image = sprites[1374]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # bridge pieces.
+    elif building_id in (90, 91):
+        thing_image = sprites[1374]
+        # Bridge pieces only come in one direction and can be rotated.
+        tile_h_offset = -13
+        if city.tilelist[thing_location].bit_flags.rotate:
+            thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # top-bottom right
+    elif building_id == 50:
+        thing_image = sprites[1376].copy()
+        thing_image = thing_image.transpose(Image.FLIP_LEFT_RIGHT)
+        tile_w_offset = -1
+    # top-bottom left
+    elif building_id == 52:
+        thing_image = sprites[1376]
+    # left-right lower
+    elif building_id == 51:
+        thing_image = sprites[1375]
+        tile_h_offset = 8
+    # left-right upper
+    elif building_id == 53:
+        thing_image = sprites[1375]
+    # upper slopes
+    elif building_id == 46:
+        thing_image = sprites[1377]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    elif building_id == 47:
+        thing_image = sprites[1377]
+    elif building_id == 48:
+        thing_image = sprites[1378]
+    elif building_id == 49:
+        thing_image = sprites[1378]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    # lower slopes
+    elif building_id == 59:
+        thing_image = sprites[1377]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+        tile_h_offset = 8
+    elif building_id == 60:
+        thing_image = sprites[1377]
+        tile_h_offset = 8
+        # thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+    elif building_id == 61:
+        tile_h_offset = 6
+        thing_image = sprites[1378]
+    elif building_id == 62:
+        thing_image = sprites[1378]
+        thing_image = thing_image.copy().transpose(Image.FLIP_LEFT_RIGHT)
+        tile_h_offset = 6
+    else:
+        print(building_id)
+    return thing_image, tile_h_offset, tile_w_offset
 
 
 def draw_monster(sprites):
@@ -674,7 +764,7 @@ def draw_edge(city, sprites, position):
     return {position: {"pixel": (a, b), "image": image}}
 
 
-def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False):
+def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False, crop_image=False):
     """
     Creates a PNG preview of the given city file
     Args:
@@ -683,6 +773,7 @@ def render_city_image(input_sc2_path, output_path, sprites_path, city=False, tra
         sprites_path (str): path to the sprites directory to use to draw the city.
         city (City): city object to render.
         transprent_bg (bool): Whether or not to have a transparent background or not.
+        crop_image (bool, optional): Whether or not to crop the resulting image. Defaults to False.
     Returns:
         Nothing, but saves a PNG file to disk.
     """
@@ -690,12 +781,22 @@ def render_city_image(input_sc2_path, output_path, sprites_path, city=False, tra
         city = sc2p.City()
         city.create_city_from_file(input_sc2_path)
     sprites = load_sprites(sprites_path)
+
+
+    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full")
+    width = image_width
+    height = image_height
+
+    if crop_image:
+        final_size = terrain_layer.getbbox()
+        width = final_size[2] - final_size[0]
+        height = final_size[3] - final_size[1]
+        terrain_layer = terrain_layer.crop(final_size)
+
     if not transprent_bg:
         background = Image.new('RGBA', (width, height), (55, 23, 0, 255))
     else:
         background = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-
-    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full")
 
     background.paste(terrain_layer, (0, 0), terrain_layer)
 
@@ -753,6 +854,7 @@ def parse_command_line():
     parser.add_argument('-o', '--output', dest="output_file", help="output image filename", metavar="FILE", required=True)
     parser.add_argument('-s', '--sprites', dest="sprites_dir", help="directory containing sprites", metavar="FILE", required=True)
     parser.add_argument('-t', '--transparent', dest="transparent_bg", help="make image background tranparent", required=False, action="store_true", default=False)
+    parser.add_argument('-c', '--crop', dest="crop_image", help="crop the image to the minimal size", required=False, action="store_true", default=False)
     args = parser.parse_args()
     return args
 
@@ -764,4 +866,5 @@ if __name__ == "__main__":
     output_file = options.output_file
     image_location = options.sprites_dir
     transparent_bg = options.transparent_bg
-    render_city_image(input_file, output_file, image_location, None, transparent_bg)
+    crop_image = options.crop_image
+    render_city_image(input_file, output_file, image_location, None, transparent_bg, crop_image)
