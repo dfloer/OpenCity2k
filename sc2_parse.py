@@ -1,5 +1,6 @@
 import sc2_iff_parse as sc2p
 import sc2_serialize as sc2s
+import image_parse as imgp
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
 from utils import serialize_int32, serialize_uint32
@@ -64,11 +65,7 @@ class City:
         self.growth = Minimap("growth", 32)
 
         # Optional Scenario stuff
-        self.is_scenario = False
-        self.scenario_text = ''
-        self.scenario_descriptive_text = ''
-        self.scenario_condition = {}
-        self.scenario_pict = []
+        self.scenario = None
 
         self.original_filename = ""
 
@@ -222,80 +219,6 @@ class City:
             if self.debug:
                 print(f"Graph: {graph_name}\n{graph}")
 
-    def parse_scenario(self, raw_city_data):
-        """
-        Parses the scenario information.
-        Args:
-            raw_city_data (bytes): Raw data to parse scenario information out of.
-        """
-        self.is_scenario = True
-
-        raw_text = raw_city_data["TEXT"]
-        raw_scenario = raw_city_data["SCEN"]
-        picture = raw_city_data["PICT"]
-
-        for entry in raw_text:
-            string_id = entry[: 4]
-            raw_string = entry[4 :].decode('ASCII').replace('\r', '\n')
-            if string_id == b'\x80\x00\x00\x00':
-                self.scenario_text = raw_string
-            elif string_id == b'\x81\x00\x00\x00':
-                self.scenario_descriptive_text = raw_string
-            else:
-                print(f"Found unknown TEXT block in input file.\nid: {string_id}, contents: \"{raw_string}\"")
-        if self.debug:
-            print(f"Scenario:\nShort text: {self.scenario_text}\nDescriptive Text:{self.scenario_descriptive_text}")
-
-        conditions = {}
-        offset = 4
-        contents = collections.OrderedDict((
-            ("disaster_type", 2),
-            ("distater_x_location", 1),
-            ("disaster_y_location", 1),
-            ("time_limit_months", 2),
-            ("city_size_goal", 4),
-            ("residential_goal", 4),
-            ("commercial_goal", 4),
-            ("industrial_goal", 4),
-            ("cash_flow_goal-bonds", 4),
-            ("land_value_goal", 4),
-            ("pollution_limit", 4),
-            ("traffic_limit", 4),
-            ("crime_limit", 4),
-            ("build_item_one", 1),
-            ("build_item_two", 1),
-            ("item_one_tiles", 2),
-            ("item_two_tiles", 2),))
-        for k, v in contents.items():
-            conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
-            offset += v
-            if self.debug:
-                print(f"Conditions: {conditions}")
-            self.scenario_condition = conditions
-
-        header = picture[0 : 4]
-        if header != bytearray(b'\x80\x00\x00\x00'):
-            print("Scenario PICT parsing failed.")  # todo: exception?
-        # Why is the endianness different here? It just is.
-        row_length = unpack('<H', picture[4 : 6])[0]  # x dimension of image.
-        row_count = unpack('<H', picture[6 : 8])[0]  # y dimension of image.
-        image_data = []
-        picture_data = picture[8 : ]
-        if self.debug:
-            print(f"Scenario PICT, {row_length}x{row_count} pixels:")
-        for row_idx in range(0, row_count):
-            row_start = row_idx * (row_length + 1)
-            row = [x for x in picture_data[row_start : row_start + row_length + 1]]
-            if row[-1] != 255:
-                row = [0] * row_length
-            else:
-                row = row[ : -1]
-            image_data.append(row)
-        if self.debug:
-            for idx, r in enumerate(image_data):
-                print(f"{idx}:\n{r}")
-        self.scenario_pict = image_data
-
     def find_buildings(self, raw_sc2_data):
         """
         Finds all of the buildings in a city file and creates a dict populated with Building objects with the keys being the x, y coordinates of the left corner.
@@ -406,7 +329,7 @@ class City:
 
         # Check for scenario.
         if all(x in uncompressed_city.keys() for x in ("TEXT", "SCEN", "PICT")):
-            self.parse_scenario(uncompressed_city)
+            self.scenario = Scenario(uncompressed_city)
 
     def name_city(self, uncompressed_data):
         """
@@ -677,7 +600,7 @@ class City:
         uncompressed_segments["XPOP"] = sc2s.serialize_minimap(self, "density")
         uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
         uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
-        if self.is_scenario:
+        if self.scenario:
             pass
             # uncompressed_segments["TEXT"] =
             # uncompressed_segments["SCEN"] =
@@ -1128,3 +1051,94 @@ class Minimap:
                 s += f"{y} "
             s += '\n'
         return s
+
+
+class Scenario:
+    """
+    Stores the scenario information for a city.
+    """
+    def __init__(self, raw_city_data, debug=False):
+        self.debug = debug
+        self.scenario_text = ''
+        self.scenario_descriptive_text = ''
+        self.scenario_condition = {}
+        self.scenario_pict = []
+        self.parse_scenario(raw_city_data)
+
+    def parse_scenario(self, raw_city_data):
+        """
+        Parses the scenario information.
+        Args:
+            raw_city_data (bytes): Raw data to parse scenario information out of.
+        """
+        raw_text = raw_city_data["TEXT"]
+        raw_scenario = raw_city_data["SCEN"]
+        picture = raw_city_data["PICT"]
+
+        for entry in raw_text:
+            string_id = entry[: 4]
+            raw_string = entry[4 :].decode('ASCII').replace('\r', '\n')
+            if string_id == b'\x80\x00\x00\x00':
+                self.scenario_text = raw_string
+            elif string_id == b'\x81\x00\x00\x00':
+                self.scenario_descriptive_text = raw_string
+            else:
+                print(f"Found unknown TEXT block in input file.\nid: {string_id}, contents: \"{raw_string}\"")
+        if self.debug:
+            print(f"Scenario:\nShort text: {self.scenario_text}\nDescriptive Text:{self.scenario_descriptive_text}")
+
+        conditions = {}
+        offset = 4
+        contents = collections.OrderedDict((
+            ("disaster_type", 2),
+            ("distater_x_location", 1),
+            ("disaster_y_location", 1),
+            ("time_limit_months", 2),
+            ("city_size_goal", 4),
+            ("residential_goal", 4),
+            ("commercial_goal", 4),
+            ("industrial_goal", 4),
+            ("cash_flow_goal-bonds", 4),
+            ("land_value_goal", 4),
+            ("pollution_limit", 4),
+            ("traffic_limit", 4),
+            ("crime_limit", 4),
+            ("build_item_one", 1),
+            ("build_item_two", 1),
+            ("item_one_tiles", 2),
+            ("item_two_tiles", 2),))
+        for k, v in contents.items():
+            conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
+            offset += v
+            if self.debug:
+                print(f"Conditions: {conditions}")
+            self.scenario_condition = conditions
+
+        header = picture[0 : 4]
+        if header != bytearray(b'\x80\x00\x00\x00'):
+            print("Scenario PICT parsing failed.")  # todo: exception?
+        # Why is the endianness different here? It just is.
+        row_length = unpack('<H', picture[4 : 6])[0]  # x dimension of image.
+        row_count = unpack('<H', picture[6 : 8])[0]  # y dimension of image.
+        image_data = []
+        picture_data = picture[8 : ]
+        if self.debug:
+            print(f"Scenario PICT, {row_length}x{row_count} pixels:")
+        for row_idx in range(0, row_count):
+            row_start = row_idx * (row_length + 1)
+            row = [x for x in picture_data[row_start : row_start + row_length + 1]]
+            if row[-1] not in (0, 255):
+                row = [0] * row_length
+            else:
+                row = row[ : -1]
+            image_data.append(row)
+        # In case the PICT isn't 65x65, like in MALIBU.SCN
+        if row_count > 65:
+            image_data = image_data[: 65]
+        if self.debug:
+            for idx, r in enumerate(image_data):
+                print(f"{idx}:\n{r}")
+        self.scenario_pict = image_data
+
+    def pict_to_img(self, palette):
+        return imgp.pict_to_rgb(self.scenario_pict, palette, self.debug)
