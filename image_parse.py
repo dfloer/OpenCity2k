@@ -1,3 +1,4 @@
+from collections import defaultdict, namedtuple
 from PIL import Image
 from utils import parse_uint16, parse_uint32
 from os import path
@@ -330,3 +331,39 @@ def animation_get_pixel(pix_coords, anim_idx, anim_check, anim_list, anim_list_l
         delay_period = (anim_idx // flash_delay) % 2  # for a flash_delay of 2, will produce something like 00110011...
         return anim_pixels[new_pix_idx ^ delay_period]
     return anim_pixels[new_pix_idx]  # finally return the coordinates into the palette.
+
+
+def pict_to_rgb(pict, palette_fn, debug=False):
+    """
+    Turns a scenario PICT into a RGB Pillow image.
+    Args:
+        pict ([[int]]): 65x65 array of raw data.
+        palette (pillow image array): mapping from which colours the pixel specifies to RGB values.
+        debug (bool, optional): Whether or not to print debug messages. Defaults to False.
+    Returns:
+        Pillow image.
+    """
+    p1 = parse_palette(palette_fn)
+    img = Image.new("RGB", (63, 63))
+    img_pix = defaultdict(int)
+    img_data = []
+    for r, row in enumerate(pict):
+        for c, col in enumerate(row):
+            if r == 0 or r == 64 or c == 0 or c == 64:
+                continue
+            cr = col
+            col = col + 16
+            if col > 255:
+                col = 0
+            img_pix[col] += 1
+            i = col >> 4
+            j = col & 0x0f
+            p = p1[j][i]
+            # Why to these special cases need to exist?
+            if cr == 0:
+                p = (0, 0, 0)
+            if cr == 254:
+                p = (127, 127, 127)
+            img_data += [p]
+    img.putdata(img_data)
+    return img
