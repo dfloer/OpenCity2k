@@ -1,14 +1,15 @@
 import sc2_iff_parse as sc2p
 import sc2_serialize as sc2s
+import image_serialize as imgser
 import image_parse as imgp
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
-from utils import serialize_int32, serialize_uint32
+from utils import serialize_int32, serialize_uint32, uint_to_bytes
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
 
-from struct import unpack
+from struct import unpack, pack
 
 
 class City:
@@ -577,7 +578,7 @@ class City:
         Returns:
             Bytes representing a serialized .sc2 file to save.
         """
-        do_not_compress = ("CNAM", "ALTM", "PICT")
+        do_not_compress = ("CNAM", "ALTM", "TEXT1", "TEXT2", "SCEN", "PICT")
         uncompressed_segments = {}
         uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
         uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
@@ -601,10 +602,11 @@ class City:
         uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
         uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
         if self.scenario:
-            pass
-            # uncompressed_segments["TEXT"] =
-            # uncompressed_segments["SCEN"] =
-            # uncompressed_segments["PICT"] =
+            scen = self.scenario.serialize_scenario()
+            uncompressed_segments["TEXT1"] = scen["TEXT1"]
+            uncompressed_segments["TEXT2"] = scen["TEXT2"]
+            uncompressed_segments["SCEN"] = scen["SCEN"]
+            uncompressed_segments["PICT"] = scen["PICT"]
         compressed_segments = {}
         for segment_name, segment_data in uncompressed_segments.items():
             if segment_name not in do_not_compress:
@@ -617,6 +619,10 @@ class City:
         output_bytes += bytearray(bytes("SIZE", 'ascii'))
         output_bytes += bytearray(bytes("SCDH", 'ascii'))
         for segment_name, segment_data in compressed_segments.items():
+            # There are duplicate TEXT entries, despite this not being allowed by the IFF spec.
+            # So this needs to be handled specially when serializing the data.
+            if segment_name in ("TEXT1", "TEXT2"):
+                segment_name = "TEXT"
             segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
             output_bytes += bytearray(segment_header + segment_data)
         total_bytes = len(output_bytes) - 8  # FORM and length don't count.
@@ -1057,13 +1063,39 @@ class Scenario:
     """
     Stores the scenario information for a city.
     """
-    def __init__(self, raw_city_data, debug=False):
+    def __init__(self, raw_city_data=None, debug=False):
         self.debug = debug
         self.scenario_text = ''
         self.scenario_descriptive_text = ''
         self.scenario_condition = {}
         self.scenario_pict = []
-        self.parse_scenario(raw_city_data)
+        self._contents = collections.OrderedDict((
+            ("disaster_type", 2),
+            ("disaster_x_location", 1),
+            ("disaster_y_location", 1),
+            ("time_limit_months", 2),
+            ("city_size_goal", 4),
+            ("residential_goal", 4),
+            ("commercial_goal", 4),
+            ("industrial_goal", 4),
+            ("cash_flow_goal-bonds", 4),
+            ("land_value_goal", 4),
+            ("pollution_limit", 4),
+            ("traffic_limit", 4),
+            ("crime_limit", 4),
+            ("build_item_one", 1),
+            ("build_item_two", 1),
+            ("item_one_tiles", 2),
+            ("item_two_tiles", 2),))
+        self.test = None
+        if raw_city_data:
+            self.parse_scenario(raw_city_data)
+        else:
+            pass  # Blank scenario.
+
+    def add_conditions(self, new_conditions):
+        for k, c in zip(self._contents.keys(), new_conditions):
+            self.scenario_condition[k] = c
 
     def parse_scenario(self, raw_city_data):
         """
@@ -1089,25 +1121,7 @@ class Scenario:
 
         conditions = {}
         offset = 4
-        contents = collections.OrderedDict((
-            ("disaster_type", 2),
-            ("distater_x_location", 1),
-            ("disaster_y_location", 1),
-            ("time_limit_months", 2),
-            ("city_size_goal", 4),
-            ("residential_goal", 4),
-            ("commercial_goal", 4),
-            ("industrial_goal", 4),
-            ("cash_flow_goal-bonds", 4),
-            ("land_value_goal", 4),
-            ("pollution_limit", 4),
-            ("traffic_limit", 4),
-            ("crime_limit", 4),
-            ("build_item_one", 1),
-            ("build_item_two", 1),
-            ("item_one_tiles", 2),
-            ("item_two_tiles", 2),))
-        for k, v in contents.items():
+        for k, v in self._contents.items():
             conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
             offset += v
             if self.debug:
@@ -1142,3 +1156,35 @@ class Scenario:
 
     def pict_to_img(self, palette):
         return imgp.pict_to_rgb(self.scenario_pict, palette, self.debug)
+
+    def img_to_pict(self, img, palette):
+        flat_img = imgser.img_to_pict_2(img, palette)
+        l = [[] for _ in range(65)]
+        for i in range(65):
+            l[i] = flat_img[i * 65 : i * 65 + 65]
+        self.scenario_pict = l
+
+
+    def serialize_scenario(self):
+        """
+        Turns this scenario object back into bytes.
+        """
+        output = {"TEXT1": None, "TEXT2": None, "SCEN": None, "PICT": None}
+        text = b'\x80\x00\x00\x00'
+        text += self.scenario_text.replace('\n', '\r').encode('ASCII')
+        output["TEXT1"] = text
+        text = b'\x81\x00\x00\x00'
+        text += self.scenario_descriptive_text.replace('\n', '\r').encode('ASCII')
+        output["TEXT2"] = text
+        scenario_conditions = b'\x80\x00\x00\x00'
+        for k, v in self._contents.items():
+            cond = self.scenario_condition[k]
+            scenario_conditions += uint_to_bytes(cond, v)
+        output["SCEN"] = scenario_conditions
+        picture = b'\x80\x00\x00\x00'
+        w = len(self.scenario_pict)
+        h = len(self.scenario_pict[0])
+        picture += pack('<H', w) + pack('<H', h)
+        picture += imgser.pict_to_bytes(self.scenario_pict)
+        output["PICT"] = picture
+        return output

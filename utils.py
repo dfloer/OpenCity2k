@@ -205,6 +205,18 @@ def bytes_to_uint(input_bytes):
     f = mapping[num_bytes]
     return f(input_bytes)
 
+def uint_to_bytes(uint, num_bytes):
+    """
+    Variable length convenience function to convert some number of bytes to an int.
+    Args:
+        input_bytes (bytes): Input bytes to convert.
+    Returns:
+        Integer.
+    """
+    mapping = {1: serialize_uint8, 2: serialize_uint16, 4: serialize_uint32}
+    f = mapping[num_bytes]
+    return f(uint)
+
 
 def bytes_to_int32s(input_bytes):
     """
