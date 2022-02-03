@@ -16,6 +16,38 @@ def name_to_cnam(city_name):
     return data
 
 
+def generate_header():
+    """
+    Generate the file header for the city.
+    Returns:
+        bytearray: Bytes representing the header.
+    """
+    output_bytes = bytearray()
+    output_bytes += bytearray(bytes("FORM", 'ascii'))
+    # This is a placeholder, we need to fill it in later.
+    output_bytes += bytearray(bytes("SIZE", 'ascii'))
+    output_bytes += bytearray(bytes("SCDH", 'ascii'))
+    return output_bytes
+
+
+def serialize_chunks(chunks):
+    """
+    Takes a dictionary of chunks and serializes the into a big bytearray.
+    They should already be compressed (or not) as required.
+    Args:
+        chunks (dict): Key is the chunk name, like "ALTM" and the value being the bytes,
+    Returns:
+        bytearray of the bytes.
+    """
+    output_bytes = bytearray()
+    for segment_name, segment_data in chunks.items():
+        # There are duplicate TEXT entries, despite this not being allowed by the IFF spec.
+        # So this needs to be handled specially when serializing the data.
+        segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
+        output_bytes += bytearray(segment_header + segment_data)
+    return output_bytes
+
+
 def serialize_misc(city):
     """
     Serialized the MISC segment, 4800 bytes.
@@ -369,3 +401,25 @@ def serialize_graphs(city):
     for g in city.graphs.values():
         graph_bytes += g.serialize_graph()
     return graph_bytes
+
+
+def serialize_scenario(city):
+    """
+    Serialize the scenario section, if it exists.
+    These chunks are always uncompressed.
+    Args:
+        city (City): city to pull things from.
+    Returns:
+        Byte representation of the scenario, or None if there is no scenario.
+    """
+    scen = city.scenario
+    if not scen:
+        return None
+    scen_data = bytearray()
+    for chunk_name, chunk_bytes in scen.serialize_scenario().items():
+        # A bit of jank to handle the duplicated TEXT entries for the scenario.
+        if chunk_name in ("TEXT1", "TEXT2"):
+                chunk_name = "TEXT"
+        raw_data = serialize_chunks({chunk_name: chunk_bytes})
+        scen_data += raw_data
+    return scen_data

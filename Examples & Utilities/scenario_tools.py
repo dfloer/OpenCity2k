@@ -55,6 +55,8 @@ if __name__ == "__main__":
             print(f"New image open failed with error: {e}")
         if not new_image:
             pass
+        if new_image and new_image.size != (63, 63):
+            print("New image must be 63x63 pixels only.")
         elif not new_conditions:
             print("New scenario conditions not given, but in creation mode.")
         elif len(new_conditions) != 17:

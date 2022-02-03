@@ -578,7 +578,7 @@ class City:
         Returns:
             Bytes representing a serialized .sc2 file to save.
         """
-        do_not_compress = ("CNAM", "ALTM", "TEXT1", "TEXT2", "SCEN", "PICT")
+        do_not_compress = ("CNAM", "ALTM")
         uncompressed_segments = {}
         uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
         uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
@@ -601,30 +601,19 @@ class City:
         uncompressed_segments["XPOP"] = sc2s.serialize_minimap(self, "density")
         uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
         uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
-        if self.scenario:
-            scen = self.scenario.serialize_scenario()
-            uncompressed_segments["TEXT1"] = scen["TEXT1"]
-            uncompressed_segments["TEXT2"] = scen["TEXT2"]
-            uncompressed_segments["SCEN"] = scen["SCEN"]
-            uncompressed_segments["PICT"] = scen["PICT"]
         compressed_segments = {}
         for segment_name, segment_data in uncompressed_segments.items():
             if segment_name not in do_not_compress:
                 compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
             else:
                 compressed_segments[segment_name] = segment_data
-        output_bytes = bytearray()
-        output_bytes += bytearray(bytes("FORM", 'ascii'))
-        # This is a placeholder, we need to fill it in later.
-        output_bytes += bytearray(bytes("SIZE", 'ascii'))
-        output_bytes += bytearray(bytes("SCDH", 'ascii'))
-        for segment_name, segment_data in compressed_segments.items():
-            # There are duplicate TEXT entries, despite this not being allowed by the IFF spec.
-            # So this needs to be handled specially when serializing the data.
-            if segment_name in ("TEXT1", "TEXT2"):
-                segment_name = "TEXT"
-            segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
-            output_bytes += bytearray(segment_header + segment_data)
+
+        output_bytes = sc2s.generate_header()
+        output_bytes += sc2s.serialize_chunks(compressed_segments)
+        if self.scenario:
+            scen_data = sc2s.serialize_scenario(self)
+            output_bytes += scen_data
+
         total_bytes = len(output_bytes) - 8  # FORM and length don't count.
         output_bytes[4 : 8] = sc2s.serialize_int32(total_bytes)
         return output_bytes
@@ -1154,28 +1143,46 @@ class Scenario:
                 print(f"{idx}:\n{r}")
         self.scenario_pict = image_data
 
+
     def pict_to_img(self, palette):
+        """
+        Converts a scenario's PICT data into a Pillow Image.
+        Args:
+            palette (Pillow.Image): mapping from which colours the pixel specifies to RGB values.
+        Returns:
+            Image: Pillow image.
+        """
         return imgp.pict_to_rgb(self.scenario_pict, palette, self.debug)
 
+
     def img_to_pict(self, img, palette):
-        flat_img = imgser.img_to_pict_2(img, palette)
-        l = [[] for _ in range(65)]
-        for i in range(65):
-            l[i] = flat_img[i * 65 : i * 65 + 65]
+        """
+        Converts an image into a scenario PICT and sets it in the picture part of the scenario.
+        This does not do any validity checks, so it could produce files that are unopenable in the game.
+        Args:
+            img (Pillow.Image): Image to convert. This should be 63x63 and using the correct colours.
+            palette (dict): A {id: (r, g, b)} mapping dictionary, from image_parse.palette_dict()
+        """
+        flat_img = imgser.img_to_pict(img, palette)
+        l = [flat_img[i * 65 : i * 65 + 65] for i in range(65)]
         self.scenario_pict = l
 
 
     def serialize_scenario(self):
         """
         Turns this scenario object back into bytes.
+        Note that there are two "TEXT" chunks, which isn't technically allowed by the IFF standard.
+        This is how the game does it, so these two chunks are returned as TEXT1 and TEXT2 here for final creation of the scenario file elsewhere.
+        Returns:
+            A dictionary of bytes representing the scenario.
         """
         output = {"TEXT1": None, "TEXT2": None, "SCEN": None, "PICT": None}
         text = b'\x80\x00\x00\x00'
         text += self.scenario_text.replace('\n', '\r').encode('ASCII')
         output["TEXT1"] = text
-        text = b'\x81\x00\x00\x00'
-        text += self.scenario_descriptive_text.replace('\n', '\r').encode('ASCII')
-        output["TEXT2"] = text
+        desc_text = b'\x81\x00\x00\x00'
+        desc_text += self.scenario_descriptive_text.replace('\n', '\r').encode('ASCII')
+        output["TEXT2"] = desc_text
         scenario_conditions = b'\x80\x00\x00\x00'
         for k, v in self._contents.items():
             cond = self.scenario_condition[k]

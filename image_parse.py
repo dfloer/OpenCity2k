@@ -176,7 +176,12 @@ def palette_dict(palette_array):
     Returns:
         A dictionary of the form {id: {R, G, B)} for each entry in the palette.
     """
-    flat_palette = [item for sublist in palette_array for item in sublist]
+    # The ordering here is important.
+    flat_palette = []
+    for x in range(16):
+        for y in range(16):
+            v = palette_array[y][x]
+            flat_palette += [v]
     return {k: v for k, v in enumerate(flat_palette)}
 
 

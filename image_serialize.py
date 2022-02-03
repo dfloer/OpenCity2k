@@ -38,33 +38,7 @@ def rgb_to_palette(rgb, palette):
 
 def img_to_pict(img, palette):
     """
-    Turns a Pillow image into a PICT image.
-    Args:
-        img (Image): Pillow image. Must be 63x63 and already using the colours from the palette.
-        palette (pillow image array): mapping from which colours the pixel specifies to RGB values.
-    Returns:
-        list of lists of integers, representing the full PICT image, including borders.
-    """
-    raw_img = list(img.getdata())
-    pict_img = [[0] * 65]
-    for x in range(0, len(raw_img), 63):
-        r = [0]
-        for p in raw_img[x : x + 63]:
-            for a in range(16):
-                for b in range(16):
-                    if p == palette[a][b]:
-                        r += [a * 16 + b]
-        #             else:
-        #                 print("potat")
-        # r += [0]
-        pict_img += r
-    pict_img = [[0] * 65]
-    return pict_img
-
-
-def img_to_pict_2(img, palette):
-    """
-    Turns a Pillow image into a PICT image. Attempt 2, with remapping.
+    Turns a Pillow image into a PICT image. This will remap colours if they're not in the palette.
     Args:
         img (Image): Pillow image. Must be 63x63 and already using the colours from the palette.
         palette (pillow image array): mapping from which colours the pixel specifies to RGB values.
@@ -76,8 +50,6 @@ def img_to_pict_2(img, palette):
     for x in range(63):
         pixel_list += [0] + remap[x * 63 : (x + 1) * 63] + [0]
     pixel_list += [0 for _ in range(65)]
-    print(len(remap), len(pixel_list))
-    print(63 * 63, 65 * 65)
     return pixel_list
 
 
@@ -92,17 +64,36 @@ def remap_closest_colour(img, palette):
     Returns:
         list(int): List where each entry is the index in the palette to use for the PICT value.
     """
+    # Note that the indices that are allowed appear to be 16 to 171.
+    # Which is why there is the -16 offset later in the code.
+    # Why? Not entirely sure, but this works.
+    allowed_colours = [x for x in range(0, 160)]
     pixels = []
     palette = ip.palette_dict(palette)
+    pal_colours = list(palette.values())
     for pixel in img.getdata():
-        r, g, b = pixel
-        colour_differences = []
-        for pal_idx, colour in palette.items():
-            if pal_idx > 160:  # The cycling colours aren't used, and shouldn't be checked.
-                break
-            cr, cg, cb = colour
-            diff = sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2)
-            colour_differences += [diff]
-        closest_colour = colour_differences.index(min(colour_differences))
+        # If there's an exact match, just use it instead.
+        if pixel in palette.values():
+            closest_colour = pal_colours.index(pixel)
+        else:
+            r, g, b = pixel
+            colour_differences = []
+            for pal_idx, colour in palette.items():
+                if pal_idx not in allowed_colours:
+                    continue
+                cr, cg, cb = colour
+                # This doesn't always seem like it produces the best results.
+                # Perhaps there's a bug here, or maybe it's the wrong algorithm for this.
+                diff = sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2)
+                colour_differences += [diff]
+            closest_colour = colour_differences.index(min(colour_differences))
+        closest_colour = (closest_colour - 16)
+        if closest_colour < 0:
+            closest_colour = 0
+        # Reverse of the tweak that seemes needed.
+        if pixel == (0, 0, 0):
+            closest_colour == 0
+        elif pixel == (127, 127, 127):
+            closest_colour == 254
         pixels += [closest_colour]
     return pixels
