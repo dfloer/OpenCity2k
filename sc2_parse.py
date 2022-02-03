@@ -1,13 +1,15 @@
 import sc2_iff_parse as sc2p
 import sc2_serialize as sc2s
+import image_serialize as imgser
+import image_parse as imgp
 import collections
 from utils import parse_int32, parse_uint32, parse_uint16, parse_uint8, int_to_bitstring, int_to_bytes, bytes_to_hex, bytes_to_uint, bytes_to_int32s
-from utils import serialize_int32, serialize_uint32
+from utils import serialize_int32, serialize_uint32, uint_to_bytes
 import os.path
 import Data.buildings as buildings
 from copy import deepcopy
 
-from struct import unpack
+from struct import unpack, pack
 
 
 class City:
@@ -64,11 +66,7 @@ class City:
         self.growth = Minimap("growth", 32)
 
         # Optional Scenario stuff
-        self.is_scenario = False
-        self.scenario_text = ''
-        self.scenario_descriptive_text = ''
-        self.scenario_condition = {}
-        self.scenario_pict = []
+        self.scenario = None
 
         self.original_filename = ""
 
@@ -222,80 +220,6 @@ class City:
             if self.debug:
                 print(f"Graph: {graph_name}\n{graph}")
 
-    def parse_scenario(self, raw_city_data):
-        """
-        Parses the scenario information.
-        Args:
-            raw_city_data (bytes): Raw data to parse scenario information out of.
-        """
-        self.is_scenario = True
-
-        raw_text = raw_city_data["TEXT"]
-        raw_scenario = raw_city_data["SCEN"]
-        picture = raw_city_data["PICT"]
-
-        for entry in raw_text:
-            string_id = entry[: 4]
-            raw_string = entry[4 :].decode('ASCII').replace('\r', '\n')
-            if string_id == b'\x80\x00\x00\x00':
-                self.scenario_text = raw_string
-            elif string_id == b'\x81\x00\x00\x00':
-                self.scenario_descriptive_text = raw_string
-            else:
-                print(f"Found unknown TEXT block in input file.\nid: {string_id}, contents: \"{raw_string}\"")
-        if self.debug:
-            print(f"Scenario:\nShort text: {self.scenario_text}\nDescriptive Text:{self.scenario_descriptive_text}")
-
-        conditions = {}
-        offset = 4
-        contents = collections.OrderedDict((
-            ("disaster_type", 2),
-            ("distater_x_location", 1),
-            ("disaster_y_location", 1),
-            ("time_limit_months", 2),
-            ("city_size_goal", 4),
-            ("residential_goal", 4),
-            ("commercial_goal", 4),
-            ("industrial_goal", 4),
-            ("cash_flow_goal-bonds", 4),
-            ("land_value_goal", 4),
-            ("pollution_limit", 4),
-            ("traffic_limit", 4),
-            ("crime_limit", 4),
-            ("build_item_one", 1),
-            ("build_item_two", 1),
-            ("item_one_tiles", 2),
-            ("item_two_tiles", 2),))
-        for k, v in contents.items():
-            conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
-            offset += v
-            if self.debug:
-                print(f"Conditions: {conditions}")
-            self.scenario_condition = conditions
-
-        header = picture[0 : 4]
-        if header != bytearray(b'\x80\x00\x00\x00'):
-            print("Scenario PICT parsing failed.")  # todo: exception?
-        # Why is the endianness different here? It just is.
-        row_length = unpack('<H', picture[4 : 6])[0]  # x dimension of image.
-        row_count = unpack('<H', picture[6 : 8])[0]  # y dimension of image.
-        image_data = []
-        picture_data = picture[8 : ]
-        if self.debug:
-            print(f"Scenario PICT, {row_length}x{row_count} pixels:")
-        for row_idx in range(0, row_count):
-            row_start = row_idx * (row_length + 1)
-            row = [x for x in picture_data[row_start : row_start + row_length + 1]]
-            if row[-1] != 255:
-                row = [0] * row_length
-            else:
-                row = row[ : -1]
-            image_data.append(row)
-        if self.debug:
-            for idx, r in enumerate(image_data):
-                print(f"{idx}:\n{r}")
-        self.scenario_pict = image_data
-
     def find_buildings(self, raw_sc2_data):
         """
         Finds all of the buildings in a city file and creates a dict populated with Building objects with the keys being the x, y coordinates of the left corner.
@@ -406,7 +330,7 @@ class City:
 
         # Check for scenario.
         if all(x in uncompressed_city.keys() for x in ("TEXT", "SCEN", "PICT")):
-            self.parse_scenario(uncompressed_city)
+            self.scenario = Scenario(uncompressed_city)
 
     def name_city(self, uncompressed_data):
         """
@@ -654,7 +578,7 @@ class City:
         Returns:
             Bytes representing a serialized .sc2 file to save.
         """
-        do_not_compress = ("CNAM", "ALTM", "PICT")
+        do_not_compress = ("CNAM", "ALTM")
         uncompressed_segments = {}
         uncompressed_segments["CNAM"] = sc2s.name_to_cnam(self.city_name)
         uncompressed_segments["MISC"] = sc2s.serialize_misc(self)
@@ -677,25 +601,19 @@ class City:
         uncompressed_segments["XPOP"] = sc2s.serialize_minimap(self, "density")
         uncompressed_segments["XROG"] = sc2s.serialize_minimap(self, "growth")
         uncompressed_segments["XGRP"] = sc2s.serialize_graphs(self)
-        if self.is_scenario:
-            pass
-            # uncompressed_segments["TEXT"] =
-            # uncompressed_segments["SCEN"] =
-            # uncompressed_segments["PICT"] =
         compressed_segments = {}
         for segment_name, segment_data in uncompressed_segments.items():
             if segment_name not in do_not_compress:
                 compressed_segments[segment_name] = sc2p.compress_rle(segment_data)
             else:
                 compressed_segments[segment_name] = segment_data
-        output_bytes = bytearray()
-        output_bytes += bytearray(bytes("FORM", 'ascii'))
-        # This is a placeholder, we need to fill it in later.
-        output_bytes += bytearray(bytes("SIZE", 'ascii'))
-        output_bytes += bytearray(bytes("SCDH", 'ascii'))
-        for segment_name, segment_data in compressed_segments.items():
-            segment_header = bytes(segment_name, 'ascii') + serialize_int32(len(segment_data))
-            output_bytes += bytearray(segment_header + segment_data)
+
+        output_bytes = sc2s.generate_header()
+        output_bytes += sc2s.serialize_chunks(compressed_segments)
+        if self.scenario:
+            scen_data = sc2s.serialize_scenario(self)
+            output_bytes += scen_data
+
         total_bytes = len(output_bytes) - 8  # FORM and length don't count.
         output_bytes[4 : 8] = sc2s.serialize_int32(total_bytes)
         return output_bytes
@@ -1128,3 +1046,152 @@ class Minimap:
                 s += f"{y} "
             s += '\n'
         return s
+
+
+class Scenario:
+    """
+    Stores the scenario information for a city.
+    """
+    def __init__(self, raw_city_data=None, debug=False):
+        self.debug = debug
+        self.scenario_text = ''
+        self.scenario_descriptive_text = ''
+        self.scenario_condition = {}
+        self.scenario_pict = []
+        self._contents = collections.OrderedDict((
+            ("disaster_type", 2),
+            ("disaster_x_location", 1),
+            ("disaster_y_location", 1),
+            ("time_limit_months", 2),
+            ("city_size_goal", 4),
+            ("residential_goal", 4),
+            ("commercial_goal", 4),
+            ("industrial_goal", 4),
+            ("cash_flow_goal-bonds", 4),
+            ("land_value_goal", 4),
+            ("pollution_limit", 4),
+            ("traffic_limit", 4),
+            ("crime_limit", 4),
+            ("build_item_one", 1),
+            ("build_item_two", 1),
+            ("item_one_tiles", 2),
+            ("item_two_tiles", 2),))
+        self.test = None
+        if raw_city_data:
+            self.parse_scenario(raw_city_data)
+        else:
+            pass  # Blank scenario.
+
+    def add_conditions(self, new_conditions):
+        for k, c in zip(self._contents.keys(), new_conditions):
+            self.scenario_condition[k] = c
+
+    def parse_scenario(self, raw_city_data):
+        """
+        Parses the scenario information.
+        Args:
+            raw_city_data (bytes): Raw data to parse scenario information out of.
+        """
+        raw_text = raw_city_data["TEXT"]
+        raw_scenario = raw_city_data["SCEN"]
+        picture = raw_city_data["PICT"]
+
+        for entry in raw_text:
+            string_id = entry[: 4]
+            raw_string = entry[4 :].decode('ASCII').replace('\r', '\n')
+            if string_id == b'\x80\x00\x00\x00':
+                self.scenario_text = raw_string
+            elif string_id == b'\x81\x00\x00\x00':
+                self.scenario_descriptive_text = raw_string
+            else:
+                print(f"Found unknown TEXT block in input file.\nid: {string_id}, contents: \"{raw_string}\"")
+        if self.debug:
+            print(f"Scenario:\nShort text: {self.scenario_text}\nDescriptive Text:{self.scenario_descriptive_text}")
+
+        conditions = {}
+        offset = 4
+        for k, v in self._contents.items():
+            conditions[k] = bytes_to_uint(raw_scenario[offset : offset + v])
+            offset += v
+            if self.debug:
+                print(f"Conditions: {conditions}")
+            self.scenario_condition = conditions
+
+        header = picture[0 : 4]
+        if header != bytearray(b'\x80\x00\x00\x00'):
+            print("Scenario PICT parsing failed.")  # todo: exception?
+        # Why is the endianness different here? It just is.
+        row_length = unpack('<H', picture[4 : 6])[0]  # x dimension of image.
+        row_count = unpack('<H', picture[6 : 8])[0]  # y dimension of image.
+        image_data = []
+        picture_data = picture[8 : ]
+        if self.debug:
+            print(f"Scenario PICT, {row_length}x{row_count} pixels:")
+        for row_idx in range(0, row_count):
+            row_start = row_idx * (row_length + 1)
+            row = [x for x in picture_data[row_start : row_start + row_length + 1]]
+            if row[-1] not in (0, 255):
+                row = [0] * row_length
+            else:
+                row = row[ : -1]
+            image_data.append(row)
+        # In case the PICT isn't 65x65, like in MALIBU.SCN
+        if row_count > 65:
+            image_data = image_data[: 65]
+        if self.debug:
+            for idx, r in enumerate(image_data):
+                print(f"{idx}:\n{r}")
+        self.scenario_pict = image_data
+
+
+    def pict_to_img(self, palette):
+        """
+        Converts a scenario's PICT data into a Pillow Image.
+        Args:
+            palette (Pillow.Image): mapping from which colours the pixel specifies to RGB values.
+        Returns:
+            Image: Pillow image.
+        """
+        return imgp.pict_to_rgb(self.scenario_pict, palette, self.debug)
+
+
+    def img_to_pict(self, img, palette):
+        """
+        Converts an image into a scenario PICT and sets it in the picture part of the scenario.
+        This does not do any validity checks, so it could produce files that are unopenable in the game.
+        Args:
+            img (Pillow.Image): Image to convert. This should be 63x63 and using the correct colours.
+            palette (dict): A {id: (r, g, b)} mapping dictionary, from image_parse.palette_dict()
+        """
+        flat_img = imgser.img_to_pict(img, palette)
+        l = [flat_img[i * 65 : i * 65 + 65] for i in range(65)]
+        self.scenario_pict = l
+
+
+    def serialize_scenario(self):
+        """
+        Turns this scenario object back into bytes.
+        Note that there are two "TEXT" chunks, which isn't technically allowed by the IFF standard.
+        This is how the game does it, so these two chunks are returned as TEXT1 and TEXT2 here for final creation of the scenario file elsewhere.
+        Returns:
+            A dictionary of bytes representing the scenario.
+        """
+        output = {"TEXT1": None, "TEXT2": None, "SCEN": None, "PICT": None}
+        text = b'\x80\x00\x00\x00'
+        text += self.scenario_text.replace('\n', '\r').encode('ASCII')
+        output["TEXT1"] = text
+        desc_text = b'\x81\x00\x00\x00'
+        desc_text += self.scenario_descriptive_text.replace('\n', '\r').encode('ASCII')
+        output["TEXT2"] = desc_text
+        scenario_conditions = b'\x80\x00\x00\x00'
+        for k, v in self._contents.items():
+            cond = self.scenario_condition[k]
+            scenario_conditions += uint_to_bytes(cond, v)
+        output["SCEN"] = scenario_conditions
+        picture = b'\x80\x00\x00\x00'
+        w = len(self.scenario_pict)
+        h = len(self.scenario_pict[0])
+        picture += pack('<H', w) + pack('<H', h)
+        picture += imgser.pict_to_bytes(self.scenario_pict)
+        output["PICT"] = picture
+        return output
