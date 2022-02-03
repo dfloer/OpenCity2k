@@ -59,3 +59,13 @@ This folder contains some examples and utilities that do useful things and also 
    - `-m`: Mayor's name, optional, uses a default.
    - `-c`: City name, optional, uses a random default.
    - `-t`: Sports team name, optional, uses a random default.
+
+ - `scenario_tools.py`: Command line utility to display information about a scenario. Also allows editing of an existing scenario, or creation of a completely new scenario.
+   - `-i`/`--input`: input .sc2 to open and generate the minimaps on.
+   - `-o`/`--output`: where to save the resulting scenario file. Don't specify if not creating a new scenario.
+   - `-s`/`--save-img`: Optional. If used, specifies a path to save a PNG version of the image from the scenario's PICT segment at.
+   - `-n`/`--new-img`: Optional. Specifies an image to use for the scenario's image (PICT). Required to create a new scenario.
+   - `-p`/`--palette`: Optional. Needed if loading or saving an image. Path to the palette file to use. This should be `PAL_MSTR.BMP` in all situations.
+   - `-d`/`--desc-text`: Optional, but required for scenario creation/editing. This is the text that shows up once the scenario is loaded, in a small window in game.
+   - `-t`/`--text`: Optional, but required for scenario creation/editing. This is the text that shows up in the scenario selection window.
+   - `-c`/`--conditions`: Optional, but required for scenario creation/editing. This specifies the 17 scenario win conditions, and all must be specified as comma separated values after the flag. Example: `-c 1, 63, 63, 60, 0, 0, 0, 0, 20000, 0, 0, 0, 0, 0, 0, 0, 0`. Values in the file format specification document.
