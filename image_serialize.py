@@ -3,17 +3,6 @@ import image_parse as ip
 from utils import serialize_uint8
 from math import sqrt
 
-def rgb_to_pict(image, palette, exact=True):
-    # w = len(image)
-    # h = len(image[0])
-    img_array = []
-    print(image)
-    for row in image:
-        for col in row:
-            img_array += [rgb_to_palette(col, palette)]
-    print("img_array", img_array)
-    return pict_to_bytes(img_array)
-
 
 def pict_to_bytes(pixels, old_version=False):
     """
@@ -46,13 +35,6 @@ def pict_to_bytes(pixels, old_version=False):
         raw_image += border + row_end
     raw_image += border * (w + 2) + row_end
     return raw_image
-
-def rgb_to_palette(rgb, palette):
-    for x in palette:
-        for y in x:
-            if y == rgb:
-                return x * 16 + y
-    return None
 
 
 def img_to_pict(img, palette):
