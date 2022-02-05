@@ -1164,7 +1164,7 @@ class Scenario:
             palette (dict): A {id: (r, g, b)} mapping dictionary, from image_parse.palette_dict()
         """
         flat_img = imgser.img_to_pict(img, palette)
-        l = [flat_img[i * 65 : i * 65 + 65] for i in range(65)]
+        l = [flat_img[i * 63 : i * 63 + 63] for i in range(63)]
         self.scenario_pict = l
 
 
@@ -1189,8 +1189,8 @@ class Scenario:
             scenario_conditions += uint_to_bytes(cond, v)
         output["SCEN"] = scenario_conditions
         picture = b'\x80\x00\x00\x00'
-        w = len(self.scenario_pict)
-        h = len(self.scenario_pict[0])
+        w = len(self.scenario_pict) + 2
+        h = len(self.scenario_pict[0]) + 2
         picture += pack('<H', w) + pack('<H', h)
         picture += imgser.pict_to_bytes(self.scenario_pict)
         output["PICT"] = picture
