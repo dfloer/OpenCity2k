@@ -92,12 +92,12 @@ def remap_closest_colour(img, palette):
                 # Perhaps there's a bug here, or maybe it's the wrong algorithm for this.
                 diff = sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2)
                 colour_differences += [diff]
-            closest_colour = colour_differences.index(min(colour_differences))
+            # 18 being the offset to the start of the allowed colour range.
+            closest_colour = colour_differences.index(min(colour_differences)) + 18
             # For whatever reason, the greys from indexes 160 to 170 appear in the PICT palette as 0 to 10.
             if closest_colour >= 160:
                 closest_colour -= 160
-            closest_colour = (closest_colour - 16)# % 256
-        if closest_colour < 0:
-            print(closest_colour)
+            # Why mod 160? Seems to work.
+            closest_colour = (closest_colour - 16) % 160
         pixels += [closest_colour]
     return pixels
