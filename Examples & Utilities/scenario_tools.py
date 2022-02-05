@@ -92,11 +92,11 @@ if __name__ == "__main__":
 
             try:
                 city.save_city(out_path)
+                print("------\nNew scenario saved to:")
+                print(f"\"{out_path}\"")
             except Exception as e:
-                print(f"New scenario save failed with error: {e}")
+                print(f"------\nNew scenario save failed with error: {e}")
 
-            print("------\nNew scenario saved to:")
-            print(f"\"{out_path}\"")
     else:
         scenario = city.scenario
         print("Text:")
