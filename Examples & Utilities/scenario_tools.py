@@ -33,6 +33,7 @@ if __name__ == "__main__":
     text = options.text
     desc_text = options.desc_text
     palette = options.palette_file
+    pal = None
     city = sc2p.City()
     city.create_city_from_file(filename)
 
@@ -56,19 +57,19 @@ if __name__ == "__main__":
         if not new_image:
             pass
         if new_image and new_image.size != (63, 63):
-            print("New image must be 63x63 pixels only.")
+            print("Error: New image must be 63x63 pixels only.")
         elif not new_conditions:
-            print("New scenario conditions not given, but in creation mode.")
+            print("Error: New scenario conditions not given, but in creation mode.")
         elif len(new_conditions) != 17:
-            print(f"Not enough scenario conditions given, got {len(new_conditions)} but expecting 17.")
+            print(f"Error: Not enough scenario conditions given, got {len(new_conditions)} but expecting 17.")
         elif not in_img:
-            print("Image needed for scenario image.")
+            print("Error: Image needed for scenario image.")
         elif not out_path:
-            print("Output path to scenario needed to save new scenario.")
+            print("Error: Output path to scenario needed to save new scenario.")
         elif not text and not desc_text:
-            print("Scenario selection screen and descriptive text needed for new scenario.")
-        elif not palette:
-            print("Palette file needs to be specified to export image.")
+            print("Error: Scenario selection screen and descriptive text needed for new scenario.")
+        elif not palette and pal is None:
+            print("Error: Palette file needs to be specified to export image.")
         else:
             city.scenario = sc2p.Scenario()
             city.scenario.scenario_text = text
@@ -92,11 +93,11 @@ if __name__ == "__main__":
 
             try:
                 city.save_city(out_path)
-                print("------\nNew scenario saved to:")
-                print(f"\"{out_path}\"")
             except Exception as e:
-                print(f"------\nNew scenario save failed with error: {e}")
+                print(f"New scenario save failed with error: {e}")
 
+            print("------\nNew scenario saved to:")
+            print(f"\"{out_path}\"")
     else:
         scenario = city.scenario
         print("Text:")
@@ -108,7 +109,7 @@ if __name__ == "__main__":
 
         if out_img:
             if not pal:
-                print("Palette file needs to be specified to export image.")
+                print("Error: Palette file needs to be specified to export image.")
             else:
                 img = scenario.pict_to_img(palette)
                 if out_img:
