@@ -1,5 +1,5 @@
 from struct import pack, unpack
-from collections import Iterable
+from collections.abc import Iterable
 
 
 def flatten(l):
