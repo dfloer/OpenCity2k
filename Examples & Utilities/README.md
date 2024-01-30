@@ -14,6 +14,7 @@ This folder contains some examples and utilities that do useful things and also 
     - `-o`/`--output`: where to save the output png. Just the filename, will append extension itself.
     - `-s`/`--sprites`: directory containing the sprites. Currently only works with large (32 x 17px tile size) sprites. These can be generates using `sprite_parse.py`.
     - `-t`/`--transparent`: if set, draw city with a transparent background.
+    - `--sign`: Draw signs in city. Does not draw neighbour connection signs. Needs (included) W95FA.otf font.
 
  - `city_minimaps.py`: Command line utility to generate minimaps for a city, kinda like the ones in the game. Note that the minimaps in the game aren't 128x128, but are scaled by the UI. This generates square 128x128 minimaps.
 

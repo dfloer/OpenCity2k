@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 import argparse
 import sys
 from os import path
@@ -18,7 +18,7 @@ h_offset = 500
 layer_offset = -12
 
 
-def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=True, building_type="full"):
+def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=True, building_type="full", signs=True):
     """
     Creates an array of the tiles for terrain layer, optionally with groundcover (trees).
 
@@ -49,6 +49,9 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
     building_layer = {}
     if building_type != "none":
         building_layer = create_buildings(city, sprites)
+    sign_layer = {}
+    if signs:
+        sign_layer = create_sign_layer(city)
     things_layer = create_things_layer(city, sprites)
     disaster_layer = create_disaster_layer(city, sprites)
     terrain_layer_image = Image.new('RGBA', (image_width, image_height), (0, 0, 0, 0))
@@ -125,6 +128,11 @@ def draw_terrain_layer(city, sprites, groundcover=True, networks=True, zones=Tru
             thing_image = thing["image"]
             thing_position = thing["pixel"]
             terrain_layer_image.paste(thing_image, thing_position, thing_image)
+        if k in sign_layer.keys():
+            sign = sign_layer[k]
+            sign_image = sign["image"]
+            sign_position = sign["pixel"]
+            terrain_layer_image.paste(sign_image, sign_position, sign_image)
     return terrain_layer_image
 
 
@@ -764,7 +772,209 @@ def draw_edge(city, sprites, position):
     return {position: {"pixel": (a, b), "image": image}}
 
 
-def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False, crop_image=False):
+def create_sign_layer(city):
+    """
+    Draws the signs.
+    Args:
+        city (City): city object to draw the signs from.
+    Returns:
+        Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
+    """
+    sign_images = {}
+    try:
+        for tile_location, tile in city.tilelist.items():
+            txt = tile.text_pointer
+
+            if txt in range(0x01, 0x33):
+                full_sign = sign_draw_sign(tile.text)
+                w, h = full_sign.size
+                sign_center = w // 2
+
+                row, col = tile_location
+                tile_center = 13
+
+                altitude = tile.altitude
+                water_table_level = city.simulator_settings["GlobalSeaLevel"]
+                if altitude < water_table_level:
+                    altitude = water_table_level
+                # + 8 to make the base of the sign sit in the middle of the tile, not the edge.
+                shift = altitude * layer_offset - h + 8
+
+                # i + 3 because the pole is 3 pixels wide, so we need that offset.
+                i = (row * 16 - col * 16) + w_offset + tile_center - sign_center + 3
+                j = (row * 8 + col * 8) + h_offset + shift
+                sign_images[(row, col)] = {"pixel": (i, j), "image": full_sign}
+    except OSError as e:
+        print(f"Sign generation failed with error: {e}. Missing font?")
+    return sign_images
+
+
+def sign_draw_sign(sign_text):
+    """
+    Draws a sign with the given text.
+    Args:
+        sign_text (str): Text to draw to the sign. Trimmed to 23 characters.
+
+    Returns:
+        Image: Pillow image of the sign.
+    """
+    # I _think_ the font used in the Win95 Version for signs is probably MS Sans Serif.
+    # The closest free font I could find is W95FA by Alina Sava, so lets try that.
+    font = ImageFont.truetype("W95FA.otf", size=16)
+
+    # Sign colours:
+    text_colour = (0, 0, 0x43)
+    sign_base = (0xBB, 0xBB, 0xBB)
+    sign_hi = (0xE3, 0xE3, 0xE3)
+    sign_med = (0xA9, 0xA9, 0xA9)
+    sign_lo = (0x57, 0x57, 0x57)
+    pole_m  = (0x99, 0x99, 0x99)
+
+    if len(sign_text) > 23:
+        sign_text = sign_text[:23]
+    sign_height = 26
+    left = sign_draw_sign_left(sign_hi, sign_base, sign_lo)
+    right = sign_draw_sign_right(sign_hi, sign_med, sign_lo)
+
+    sign_body = Image.new("RGBA", (500, 26), (*sign_base, 255))
+    for col in range(500):
+        sign_body.putpixel((col, 0), sign_hi)
+        sign_body.putpixel((col, 1), sign_hi)
+        sign_body.putpixel((col, 22), sign_med)
+        sign_body.putpixel((col, 23), sign_lo)
+        sign_body.putpixel((col, 24), sign_lo)
+        sign_body.putpixel((col, 25), sign_med)
+
+    d = ImageDraw.Draw(sign_body)
+    left_width = 3
+    right_width = 3
+    x_pos = 5 + left_width
+    y_pos = 5
+    end_pad = 9
+    letter_space = 1
+
+    for letter in sign_text:
+        # This draws the letter a second time one pixel off.
+        # This seems to better approximate the look from Win95 SC2k, at least.
+        d.text((x_pos, y_pos), letter, font=font, fill=(*text_colour, 255))
+        d.text((x_pos + 1, y_pos), letter, font=font, fill=(*text_colour, 255))
+        # Deal with unprintable characters.
+        try:
+            letter_width = font.getmask(letter).getbbox()[2] + 1
+        except TypeError:
+            letter_width = 9
+        x_pos += letter_width + letter_space + 1
+
+    mask = Image.new("RGBA", (3, 26), (0, 0, 0, 255))
+    sign_body = sign_body.crop((0, 0, x_pos + end_pad + right_width, sign_height))
+    sign_body.paste(left, (0, 0), mask)
+    sign_body.paste(right, (x_pos + end_pad, 0), mask)
+
+    pole = sign_draw_pole(sign_hi, sign_lo, pole_m)
+
+    w, h = sign_body.size
+    sign_center = w // 2
+    # The -1 is because the sign pole overlaps by a single pixel.
+    total_height = h + 64 - 1
+    full_sign = Image.new("RGBA", (w, total_height), (0, 0, 0, 0))
+    mask = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+    full_sign.paste(sign_body, (0, 0), mask)
+    pole_xy = (sign_center - 3, h - 1)
+    full_sign.paste(pole, pole_xy, pole)
+    return full_sign
+
+
+def sign_draw_sign_left(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the left side of the sign
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
+    sign_height = 26
+    image = Image.new('RGBA', (3, sign_height), (255, 255, 255, 0))
+    for row in range(sign_height):
+        if row == 0:
+            pix = [None, c1, c1]
+        elif row == 1:
+            pix = [c1, c1, c1]
+        elif row == 24:
+            pix = [c1, c2, c3]
+        elif row == 25:
+            pix = [None, c1, c2]
+        else:
+            pix = [c1, c1, c2]
+        for i, p in enumerate(pix):
+            if p:
+                image.putpixel((i, row), p)
+    return image
+
+
+def sign_draw_sign_right(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the right side of the sign
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
+    sign_height = 26
+    image = Image.new('RGBA', (3, sign_height), (255, 255, 255, 0))
+    for row in range(sign_height):
+        if row == 0:
+            pix = [c1, None, None]
+        elif row == 1:
+            pix = [c1, c1, c2]
+        elif row == 25:
+            pix = [c2, c2, c2]
+        else:
+            pix = [c3, c3, c2]
+        for i, p in enumerate(pix):
+            if p:
+                image.putpixel((i, row), p)
+    return image
+
+
+def sign_draw_pole(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the sign pole.
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
+    pole_height = 64
+    pole_width = 6
+    image = Image.new('RGBA', (pole_width, pole_height), (255, 255, 255, 0))
+    c1 = (0xE3, 0xE3, 0xE3)
+    c2 = (0x57, 0x57, 0x57)
+    c3 = (0x99, 0x99, 0x99)
+    for row in range(pole_height):
+        if row == 0:
+            for x in (1, 2):
+                image.putpixel((x, row), c1)
+        elif row == 1:
+            for x in range(5):
+                image.putpixel((x, row), c1)
+            image.putpixel((5, row), c3)
+        elif row == 63:
+            for x in range(2, 6):
+                image.putpixel((x, row), c3)
+        else:
+            pix = [c1] * 2 + [c2] * 2 + [c3] * 2
+            for i, p in enumerate(pix):
+                image.putpixel((i, row), p)
+    return image
+
+
+def render_city_image(input_sc2_path, output_path, sprites_path, city=False, transprent_bg=False, crop_image=False, draw_signs=False):
     """
     Creates a PNG preview of the given city file
     Args:
@@ -783,7 +993,7 @@ def render_city_image(input_sc2_path, output_path, sprites_path, city=False, tra
     sprites = load_sprites(sprites_path)
 
 
-    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full")
+    terrain_layer = draw_terrain_layer(city, sprites, True, True, True, "full", draw_signs)
     width = image_width
     height = image_height
 
@@ -855,6 +1065,7 @@ def parse_command_line():
     parser.add_argument('-s', '--sprites', dest="sprites_dir", help="directory containing sprites", metavar="FILE", required=True)
     parser.add_argument('-t', '--transparent', dest="transparent_bg", help="make image background tranparent", required=False, action="store_true", default=False)
     parser.add_argument('-c', '--crop', dest="crop_image", help="crop the image to the minimal size", required=False, action="store_true", default=False)
+    parser.add_argument('--signs', dest="draw_signs", help="draw signs", required=False, action="store_true", default=False)
     args = parser.parse_args()
     return args
 
@@ -867,4 +1078,5 @@ if __name__ == "__main__":
     image_location = options.sprites_dir
     transparent_bg = options.transparent_bg
     crop_image = options.crop_image
-    render_city_image(input_file, output_file, image_location, None, transparent_bg, crop_image)
+    draw_signs = options.draw_signs
+    render_city_image(input_file, output_file, image_location, None, transparent_bg, crop_image, draw_signs)
