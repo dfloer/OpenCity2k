@@ -777,34 +777,47 @@ def create_sign_layer(city):
     Draws the signs.
     Args:
         city (City): city object to draw the signs from.
+    Returns:
+        Dictionary of (row, col): {"pixel": (x, y), "image": Image} objects for compositing.
     """
     sign_images = {}
-    for tile_location, tile in city.tilelist.items():
-        txt = tile.text_pointer
-        if txt in range(0x01, 0x33):
-            full_sign = sign_draw_sign(tile.text)
-            w, h = full_sign.size
-            sign_center = w // 2
+    try:
+        for tile_location, tile in city.tilelist.items():
+            txt = tile.text_pointer
 
-            row, col = tile_location
-            tile_center = 13
+            if txt in range(0x01, 0x33):
+                full_sign = sign_draw_sign(tile.text)
+                w, h = full_sign.size
+                sign_center = w // 2
 
-            altitude = tile.altitude
-            water_table_level = city.simulator_settings["GlobalSeaLevel"]
-            if altitude < water_table_level:
-                altitude = water_table_level
-            # + 8 to make the base of the sign sit in the middle of the tile, not the edge.
-            shift = altitude * layer_offset - h + 8
+                row, col = tile_location
+                tile_center = 13
 
-            # i + 3 because the pole is 3 pixels wide, so we need that offset.
-            i = (row * 16 - col * 16) + w_offset + tile_center - sign_center + 3
-            j = (row * 8 + col * 8) + h_offset + shift
-            sign_images[(row, col)] = {"pixel": (i, j), "image": full_sign}
+                altitude = tile.altitude
+                water_table_level = city.simulator_settings["GlobalSeaLevel"]
+                if altitude < water_table_level:
+                    altitude = water_table_level
+                # + 8 to make the base of the sign sit in the middle of the tile, not the edge.
+                shift = altitude * layer_offset - h + 8
+
+                # i + 3 because the pole is 3 pixels wide, so we need that offset.
+                i = (row * 16 - col * 16) + w_offset + tile_center - sign_center + 3
+                j = (row * 8 + col * 8) + h_offset + shift
+                sign_images[(row, col)] = {"pixel": (i, j), "image": full_sign}
+    except OSError as e:
+        print(f"Sign generation failed with error: {e}. Missing font?")
     return sign_images
 
 
 def sign_draw_sign(sign_text):
-    # Signs can only have a maximum of 23 characters? so limit to that.
+    """
+    Draws a sign with the given text.
+    Args:
+        sign_text (str): Text to draw to the sign. Trimmed to 23 characters.
+
+    Returns:
+        Image: Pillow image of the sign.
+    """
     # I _think_ the font used in the Win95 Version for signs is probably MS Sans Serif.
     # The closest free font I could find is W95FA by Alina Sava, so lets try that.
     font = ImageFont.truetype("W95FA.otf", size=16)
@@ -872,6 +885,15 @@ def sign_draw_sign(sign_text):
 
 
 def sign_draw_sign_left(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the left side of the sign
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
     sign_height = 26
     image = Image.new('RGBA', (3, sign_height), (255, 255, 255, 0))
     for row in range(sign_height):
@@ -892,6 +914,15 @@ def sign_draw_sign_left(c1, c2, c3):
 
 
 def sign_draw_sign_right(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the right side of the sign
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
     sign_height = 26
     image = Image.new('RGBA', (3, sign_height), (255, 255, 255, 0))
     for row in range(sign_height):
@@ -910,6 +941,15 @@ def sign_draw_sign_right(c1, c2, c3):
 
 
 def sign_draw_pole(c1, c2, c3):
+    """
+    Annoying pixel twiddling to draw the sign pole.
+    Args:
+        c1 (tuple[int]): color 1
+        c2 (tuple[int]):  color 2
+        c3 (tuple[int]):  color 3
+    Returns:
+       Image: Resulting PIL image.
+    """
     pole_height = 64
     pole_width = 6
     image = Image.new('RGBA', (pole_width, pole_height), (255, 255, 255, 0))
