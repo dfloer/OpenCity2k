@@ -841,13 +841,16 @@ def sign_draw_sign(sign_text):
     letter_space = 1
 
     for letter in sign_text:
+        # This draws the letter a second time one pixel off.
+        # This seems to better approximate the look from Win95 SC2k, at least.
         d.text((x_pos, y_pos), letter, font=font, fill=(*text_colour, 255))
+        d.text((x_pos + 1, y_pos), letter, font=font, fill=(*text_colour, 255))
         # Deal with unprintable characters.
         try:
-            letter_width = font.getmask(letter).getbbox()[2]
+            letter_width = font.getmask(letter).getbbox()[2] + 1
         except TypeError:
-            letter_width = 8
-        x_pos += letter_width + letter_space
+            letter_width = 9
+        x_pos += letter_width + letter_space + 1
 
     mask = Image.new("RGBA", (3, 26), (0, 0, 0, 255))
     sign_body = sign_body.crop((0, 0, x_pos + end_pad + right_width, sign_height))
@@ -915,10 +918,10 @@ def sign_draw_pole(c1, c2, c3):
     c3 = (0x99, 0x99, 0x99)
     for row in range(pole_height):
         if row == 0:
-            for x in range(1, 3):
+            for x in (1, 2):
                 image.putpixel((x, row), c1)
         elif row == 1:
-            for x in range(1, 5):
+            for x in range(5):
                 image.putpixel((x, row), c1)
             image.putpixel((5, row), c3)
         elif row == 63:
