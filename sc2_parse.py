@@ -130,13 +130,12 @@ class City:
                 altm = raw_sc2_data["ALTM"][tile_idx * 2 : tile_idx * 2 + 2]
                 xter = raw_sc2_data["XTER"][tile_idx : tile_idx + 1]
                 altm_bits = int_to_bitstring(parse_uint16(altm), 16)
-                tile.is_water = bool(int(altm_bits[8 : 9], 2))
-                tile.altitude_unknown = int(altm_bits[9 : 11], 2)
+                tile.water_depth = int(altm_bits[6 : 11], 2)
                 tile.altitude = int(altm_bits[11 : ], 2)
                 tile.terrain = parse_uint8(xter)
                 if self.debug:
                     print(f"altm: {altm_bits}, xter: {tile.terrain}")
-                tile.altitude_tunnel = int(altm_bits[0 : 8], 2)
+                tile.altidue_tunnel = int(altm_bits[0 : 5], 2)
                 # Next parse city stuff.
                 # skip self.building for now, it's handled specially.
                 xzon = raw_sc2_data["XZON"][tile_idx : tile_idx + 1]
@@ -639,7 +638,7 @@ class Building:
     def __str__(self):
         tile_x = self.tile_coords[0]
         tile_y = self.tile_coords[1]
-        return f"Building: {self.name} ({self.building_id}) at ({tile_x}, {tile_y})."
+        return f"Building: {self.name} ({self.building_id}/0x{0xdc:02X}) at ({tile_x}, {tile_y})."
 
 
 class BitFlags:
@@ -805,7 +804,7 @@ class Tile(City):
         self.coordinates = (0, 0)
         # Altitude map related values.
         self.altitude_tunnel = 0
-        self.is_water = 0
+        self.water_depth = 0
         self.altitude_unknown = 0
         self.altitude = 0
         # Terrain
@@ -902,9 +901,13 @@ class Tile(City):
     def text(self, val):
         self._label[self.text_pointer] = val
 
+    @property
+    def is_water(self):
+        return self.terrain >= 0x10
+
     def __str__(self):
         s = f"Tile at {self.coordinates}\n"
-        s += f"Altitude:\n\ttunnel: {self.altitude_tunnel}, water: {self.is_water}, unknown: {self.altitude_unknown}, altitude: {self.altitude}\n"
+        s += f"Altitude:\n\ttunnel: {self.altidue_tunnel}, depth: {self.water_depth}, is_water: {self.is_water}, altitude: {self.altitude}\n"
         terr = int_to_bitstring(self.terrain)
         s += f"Terrain: {terr}\n"
         # City stuff
