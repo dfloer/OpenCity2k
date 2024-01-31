@@ -19,6 +19,9 @@ def parse_command_line():
     return args
 
 
+rainbow_16c = ((0x00, 0x0F, 0x44), (0x00, 0x08, 0xFF), (0x0F, 0x00, 0x88), (0x0F, 0x0F, 0x00), (0x0F, 0x00, 0xBB), (0x0F, 0x00, 0x44), (0x0F, 0x00, 0x00), (0x08, 0x0F, 0x00), (0x00, 0x0F, 0x00), (0x08, 0x00, 0xFF), (0x0F, 0x00, 0xFF), (0x00, 0x0F, 0xFF), (0x00, 0x00, 0xFF), (0x00, 0x0F, 0xBB), (0x0F, 0x08, 0x00), (0x00, 0x0F, 0x88))
+rainbow_32c = ((0xFF, 0x00, 0x00), (0xFF, 0x31, 0x00), (0xFF, 0x62, 0x00), (0xFF, 0x94, 0x00), (0xFF, 0xC5, 0x00), (0xFF, 0xF6, 0x00), (0xD5, 0xFF, 0x00), (0xA4, 0xFF, 0x00), (0x73, 0xFF, 0x00), (0x41, 0xFF, 0x00), (0x10, 0xFF, 0x00), (0x00, 0xFF, 0x20), (0x00, 0xFF, 0x52), (0x00, 0xFF, 0x83), (0x00, 0xFF, 0xB4), (0x00, 0xFF, 0xE6), (0x00, 0xE6, 0xFF), (0x00, 0xB4, 0xFF), (0x00, 0x83, 0xFF), (0x00, 0x52, 0xFF), (0x00, 0x20, 0xFF), (0x10, 0x00, 0xFF), (0x41, 0x00, 0xFF), (0x73, 0x00, 0xFF), (0xA4, 0x00, 0xFF), (0xD5, 0x00, 0xFF), (0xFF, 0x00, 0xF6), (0xFF, 0x00, 0xC5), (0xFF, 0x00, 0x94), (0xFF, 0x00, 0x62), (0xFF, 0x00, 0x31), (0xFF, 0x00, 0x00))
+
 def draw_base_minimap(city, palette, rog=False):
     """
     Draws the base minimap, equivalent to the "Structures" minimap in the game.
@@ -30,8 +33,8 @@ def draw_base_minimap(city, palette, rog=False):
         A Pillow image.
     """
     # Indices into the colour palette.
-    colour_palette = {"trees": 52, "buildings": 254, "water": 38, "rubble": 83}
-    dirt = [24, 247, 231, 215, 199, 183, 167, 151, 135, 119, 103, 87, 71, 55]
+    colour_palette = {"trees": 67, "buildings": 0, "water": 98, "rubble": 53}
+    dirt = [129, 128, 127, 126, 125, 124, 123, 122, 121, 120, 119, 118, 117, 116]
     base_image = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
     for coords, tile in city.tilelist.items():
         if tile.building:
@@ -62,7 +65,7 @@ def draw_zones_minimap(city, palette, base_minimap):
         A Pillow image.
     """
     # Indices into the colour palette.
-    colour_palette = {"res": 179, "com": 197, "ind": 35}
+    colour_palette = {"res": 59, "com": 92, "ind": 50}
     zone_image = deepcopy(base_minimap)
     for coords, tile in city.tilelist.items():
         if tile.zone in (1, 2):
@@ -89,7 +92,7 @@ def draw_overlay_minimap(city, palette, base_minimap, overlay="traffic"):
         A Pillow image.
     """
     # Indices into the colour palette.
-    gradient_colours = [-1, 201, 217, 233, 249, 10, 26, 42, 58, 74, 90, 106, 122, 138, 154, 170]
+    gradient_colours = [-1] + list(range(155, 171))
 
     minimap_image = deepcopy(base_minimap)
     # The traffic minimap has the roads drawn onto it.
@@ -155,16 +158,16 @@ def draw_utility_minimap(city, palette, base_minimap, utility_type="water"):
         colour = None
         if tile.building and utility_type == "power":
             if getattr(tile.bit_flags, lookups[utility_type][0]):
-                colour = palette[209]
+                colour = palette[29]
                 if getattr(tile.bit_flags, lookups[utility_type][1]):
-                    colour = palette[35]
+                    colour = palette[50]
             if tile.building.building_id in powerlines:
                 colour = palette[255]
         elif utility_type == "water":
             if getattr(tile.bit_flags, lookups[utility_type][0]):
-                colour = palette[209]
+                colour = palette[29]
                 if getattr(tile.bit_flags, lookups[utility_type][1]):
-                    colour = palette[35]
+                    colour = palette[50]
         if tile.underground in pipes and utility_type == "water":
             colour = palette[255]
         if colour is not None:
@@ -208,11 +211,11 @@ def draw_rate_of_growth(city, palette):
         growth = tile.growth
         # Negative growth.
         if growth < 0x7d and growth != 0x00:
-            colour = palette[209]
+            colour = palette[29]
             output_minimap.putpixel(coords, colour)
         # Positive growth.
         elif growth > 0x82 and growth != 0xff:
-            colour = palette[52]
+            colour = palette[67]
             output_minimap.putpixel(coords, colour)
     return output_minimap
 
@@ -234,6 +237,27 @@ def draw_corners(city, palette):
             output_minimap.putpixel(coords, colours[v])
     return output_minimap
 
+def draw_altm(city, palette):
+    """
+    Map primarily for debugging purposes, draws the ALTM bits that aren't the altitude.
+    Args:
+        city (City): city to create the base minimap from.
+        palette (dict): palette to use.
+    Returns:
+        A Pillow image.
+    """
+    water_depth = Image.new('RGBA', (128, 128), (0, 0, 0, 255))
+    tunnel_depth = Image.new('RGBA', (128, 128), (0, 0, 0, 255))
+    alt_map = Image.new('RGBA', (128, 128), (0, 0, 0, 255))
+    for coords, tile in city.tilelist.items():
+        a = tile.altitude
+        v = tile.water_depth
+        w = tile.altitude_tunnel
+        water_depth.putpixel(coords, rainbow_32c[v])
+        if w > 0:
+            tunnel_depth.putpixel(coords, c)
+        alt_map.putpixel(coords, rainbow_32c[a])
+    return water_depth, tunnel_depth, alt_map
 
 def draw_bitflags(city, palette, flag=0):
     """
@@ -303,6 +327,14 @@ if __name__ == "__main__":
         corners_minimap = draw_corners(city, palette)
         with open(out_path / "_debug_corners.png", 'wb') as f:
             corners_minimap.save(f, format="png")
+
+        altm_water, altm_tunnel, altm = draw_altm(city, palette)
+        with open(out_path / "_debug_altm_water.png", 'wb') as f:
+            altm_water.save(f, format="png")
+        with open(out_path / "_debug_altm_tunnel.png", 'wb') as f:
+            altm_tunnel.save(f, format="png")
+        with open(out_path / "_debug_altm.png", 'wb') as f:
+            altm.save(f, format="png")
 
         for map_type in ("powerable", "powered", "piped", "watered", "xval", "water", "rotate", "salt"):
             flags_minimap = draw_bitflags(city, palette, map_type)

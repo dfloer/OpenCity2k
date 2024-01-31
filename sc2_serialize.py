@@ -273,8 +273,7 @@ def serialize_tile_data(city, which_tile):
         if which_tile == "ALTM":
             bit_string = ''
             bit_string += int_to_n_bits(tile.altitude_tunnel, 8)
-            bit_string += int_to_n_bits(tile.is_water, 1)
-            bit_string += int_to_n_bits(tile.altitude_unknown, 2)
+            bit_string += int_to_n_bits(tile.water_depth, 5)
             bit_string += int_to_n_bits(tile.altitude, 5)
             altidude_map = int(bit_string, 2)
             tile_data = serialize_uint16(altidude_map)
